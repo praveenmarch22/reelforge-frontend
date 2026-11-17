@@ -1,0 +1,14 @@
+# Secrets and local settings
+.env
+.env.local
+.env.*.local
+
+# Node and build output
+node_modules/
+dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
