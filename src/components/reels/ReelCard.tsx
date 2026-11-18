@@ -60,11 +60,17 @@ export function ReelCard({project, onDelete, className}: Props) {
 
       <div className="pointer-events-none absolute inset-x-2.5 top-2.5 flex items-center justify-between">
         <StatusPill status={project.status} />
-        {project.durationSeconds != null ? (
-          <span className="rounded-md bg-black/50 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white/90">
-            {formatDuration(project.durationSeconds)}
-          </span>
-        ) : null}
+        {/* Finished length when known; until then, the length the creator asked for. */}
+        <span
+          className="rounded-md bg-black/50 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white/90"
+          aria-label={
+            project.durationSeconds != null
+              ? `Length ${formatDuration(project.durationSeconds)}`
+              : `Target length ${project.targetSeconds} seconds`
+          }
+        >
+          {project.durationSeconds != null ? formatDuration(project.durationSeconds) : `~${project.targetSeconds}s`}
+        </span>
       </div>
 
       <div className="pointer-events-none absolute inset-x-3 bottom-3">
@@ -94,7 +100,8 @@ export function ReelCard({project, onDelete, className}: Props) {
             onClick={() => setMenuOpen((o) => !o)}
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/15 hover:text-white',
-              'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+              // Hidden until hover or focus with a mouse; always visible on touch screens.
+              'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100',
               menuOpen && 'bg-white/15 opacity-100',
             )}
           >

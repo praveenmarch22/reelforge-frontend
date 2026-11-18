@@ -7,6 +7,11 @@
 node_modules/
 dist/
 
+# Test output
+test-results/
+playwright-report/
+coverage/
+
 # Editors and OS
 .vscode/
 .idea/

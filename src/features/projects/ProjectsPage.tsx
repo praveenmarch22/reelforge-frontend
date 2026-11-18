@@ -1,12 +1,11 @@
 import {Plus, Search} from 'lucide-react';
 import {useEffect, useState, type ReactNode} from 'react';
-import {Link} from 'react-router-dom';
 import {ApiError} from '@/api/client';
 import {useDeleteProject, useProjects} from '@/api/hooks';
 import type {ProjectSummary} from '@/api/types';
 import {PageHeader} from '@/components/layout/AppShell';
 import {NewReelCard, ReelCard, ReelCardSkeleton} from '@/components/reels/ReelCard';
-import {Button} from '@/components/ui/Button';
+import {Button, ButtonLink} from '@/components/ui/Button';
 import {Dialog} from '@/components/ui/Dialog';
 import {Notice} from '@/components/ui/Notice';
 import {cn} from '@/lib/cn';
@@ -43,19 +42,36 @@ export function ProjectsPage() {
   const hasAny = (projects.data?.counts.total ?? 0) > 0;
   const filtered = filter !== 'all' || q !== '';
 
+  const openDelete = (project: ProjectSummary) => {
+    remove.reset(); // don't show the last Reel's error on this one
+    setToDelete(project);
+  };
+
+  const closeDelete = () => {
+    remove.reset();
+    setToDelete(null);
+  };
+
   const confirmDelete = () => {
     if (!toDelete) return;
-    remove.mutate(toDelete.id, {onSuccess: () => setToDelete(null)});
+    remove.mutate(toDelete.id, {
+      onSuccess: closeDelete,
+      onError: (e) => {
+        // Already deleted somewhere else: the result is what the creator wanted.
+        if (e instanceof ApiError && e.status === 404) {
+          closeDelete();
+          void projects.refetch();
+        }
+      },
+    });
   };
 
   return (
     <>
       <PageHeader title="Your Reels">
-        <Link to="/app/new">
-          <Button size="sm" className="h-9">
-            <Plus className="h-4 w-4" aria-hidden /> New Reel
-          </Button>
-        </Link>
+        <ButtonLink size="sm" className="h-9" to="/app/new">
+          <Plus className="h-4 w-4" aria-hidden /> New Reel
+        </ButtonLink>
       </PageHeader>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -88,7 +104,8 @@ export function ProjectsPage() {
         </div>
       </div>
 
-      {projects.isError ? (
+      {/* Only when there is nothing to show: one failed background poll keeps the last good list. */}
+      {projects.isError && !projects.data ? (
         <Notice tone="error">
           We couldn't load your Reels.{' '}
           <button type="button" className="font-semibold text-white underline" onClick={() => void projects.refetch()}>
@@ -119,17 +136,15 @@ export function ProjectsPage() {
               Clear filters
             </Button>
           ) : (
-            <Link to="/app/new" className="mt-5">
-              <Button>
-                <Plus className="h-4 w-4" aria-hidden /> New Reel
-              </Button>
-            </Link>
+            <ButtonLink className="mt-5" to="/app/new">
+              <Plus className="h-4 w-4" aria-hidden /> New Reel
+            </ButtonLink>
           )}
         </div>
       ) : (
         <Grid>
           {items.map((p) => (
-            <ReelCard key={p.id} project={p} onDelete={setToDelete} />
+            <ReelCard key={p.id} project={p} onDelete={openDelete} />
           ))}
           {!filtered ? <NewReelCard /> : null}
         </Grid>
@@ -137,7 +152,7 @@ export function ProjectsPage() {
 
       <Dialog
         open={toDelete !== null}
-        onClose={() => (remove.isPending ? undefined : setToDelete(null))}
+        onClose={() => (remove.isPending ? undefined : closeDelete())}
         title="Delete this Reel?"
         description={toDelete ? `"${toDelete.title}" and its files will be removed. This can't be undone.` : ''}
       >
@@ -147,7 +162,7 @@ export function ProjectsPage() {
           </Notice>
         ) : null}
         <div className="flex justify-end gap-2.5">
-          <Button variant="secondary" onClick={() => setToDelete(null)} disabled={remove.isPending}>
+          <Button variant="secondary" onClick={closeDelete} disabled={remove.isPending}>
             Cancel
           </Button>
           <Button variant="danger" loading={remove.isPending} onClick={confirmDelete}>

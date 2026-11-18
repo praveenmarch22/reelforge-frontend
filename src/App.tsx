@@ -19,11 +19,11 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot" element={<ForgotPasswordPage />} />
-        <Route path="/reset" element={<ResetPasswordPage />} />
       </Route>
 
-      {/* Open to everyone: used signed-in ("check your inbox") and from the email link. */}
+      {/* Open to everyone: these are reached from email links, signed in or not. */}
       <Route path="/verify" element={<VerifyEmailPage />} />
+      <Route path="/reset" element={<ResetPasswordPage />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
@@ -32,6 +32,7 @@ export function App() {
           <Route path="/app/new" element={<ComingSoon title="New Reel" milestone="F5" />} />
           <Route path="/app/p/:id/script" element={<ComingSoon title="Script editor" milestone="F5" />} />
           <Route path="/app/p/:id/edit" element={<ComingSoon title="Reel editor" milestone="F6" />} />
+          <Route path="/app/p/:id/render" element={<ComingSoon title="Render" milestone="F7" />} />
           <Route path="/app/p/:id/publish" element={<ComingSoon title="Publish" milestone="F7" />} />
           <Route path="/app/settings" element={<ComingSoon title="Settings" milestone="F8" />} />
           <Route path="/admin" element={<ComingSoon title="Admin" milestone="F8" />} />

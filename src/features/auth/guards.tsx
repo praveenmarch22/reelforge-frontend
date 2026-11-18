@@ -27,8 +27,10 @@ export function RequireAuth() {
 /** Login, sign-up and password pages: signed-in users go straight to the app. */
 export function GuestOnly() {
   const {data: user, isPending, isError, refetch} = useMe();
+  // Set by RequireAuth when it sent the visitor here; this is where they wanted to go.
+  const from = (useLocation().state as {from?: string} | null)?.from;
   if (isPending) return <FullPageSpinner />;
   if (isError) return <LoadError onRetry={() => void refetch()} />;
-  if (user) return <Navigate to={user.emailVerified ? '/app' : '/verify'} replace />;
+  if (user) return <Navigate to={user.emailVerified ? (from ?? '/app') : '/verify'} replace />;
   return <Outlet />;
 }

@@ -2,7 +2,7 @@ import {zodResolver} from '@hookform/resolvers/zod';
 import {ArrowRight, Lock, Mail} from 'lucide-react';
 import {useState} from 'react';
 import {useForm} from 'react-hook-form';
-import {Link, useLocation, useNavigate} from 'react-router-dom';
+import {Link, useLocation} from 'react-router-dom';
 import {useLogin} from '@/api/hooks';
 import {AuthHeading, AuthLayout} from '@/components/layout/AuthLayout';
 import {Button} from '@/components/ui/Button';
@@ -15,7 +15,6 @@ import {loginSchema, type LoginValues} from './schemas';
 type LocationState = {from?: string; notice?: string} | null;
 
 export function LoginPage() {
-  const navigate = useNavigate();
   const state = useLocation().state as LocationState;
   const login = useLogin();
   const [formError, setFormError] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export function LoginPage() {
     setFormError(null);
     try {
       await login.mutateAsync(values);
-      navigate(state?.from ?? '/app', {replace: true});
+      // GuestOnly now redirects to the page the visitor originally asked for (or the app).
     } catch (e) {
       setFormError(applyApiError(e, setError, ['email', 'password']));
     }

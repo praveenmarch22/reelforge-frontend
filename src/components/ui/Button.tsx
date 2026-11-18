@@ -1,5 +1,6 @@
 import {Loader2} from 'lucide-react';
 import {forwardRef, type ButtonHTMLAttributes} from 'react';
+import {Link, type LinkProps} from 'react-router-dom';
 import {cn} from '@/lib/cn';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -25,6 +26,22 @@ const sizes: Record<Size, string> = {
   md: 'h-10 px-4 text-sm rounded-xl gap-2',
   lg: 'h-12 px-6 text-[15px] rounded-xl gap-2',
 };
+
+type StyleProps = {variant?: Variant; size?: Size; fullWidth?: boolean; className?: string};
+
+const buttonClass = ({variant = 'primary', size = 'md', fullWidth, className}: StyleProps) =>
+  cn(
+    'inline-flex select-none items-center justify-center whitespace-nowrap transition duration-150',
+    variants[variant],
+    sizes[size],
+    fullWidth && 'w-full',
+    className,
+  );
+
+/** A link that looks like a button. Use it for navigation, so it is one tab stop with the link role. */
+export function ButtonLink({variant, size, fullWidth, className, ...rest}: StyleProps & LinkProps) {
+  return <Link className={buttonClass({variant, size, fullWidth, className})} {...rest} />;
+}
 
 export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
   {variant = 'primary', size = 'md', loading, fullWidth, className, children, disabled, type = 'button', ...rest},

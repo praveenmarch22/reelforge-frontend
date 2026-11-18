@@ -34,6 +34,7 @@ export const handlers = [
     const body = (await request.json()) as {name?: string; email?: string; password?: string};
     const fields: Record<string, string> = {};
     if (!body.name?.trim()) fields.name = 'Tell us your name.';
+    else if (body.name.trim().length > 80) fields.name = 'Keep it under 80 characters.';
     if (!body.email || !EMAIL.test(body.email)) fields.email = 'Enter a valid email address.';
     const passwordError = validatePassword(body.password);
     if (passwordError) fields.password = passwordError;
@@ -230,4 +231,10 @@ export const handlers = [
       costs: {script: 1, voicePer30s: 2, aiImage: 1, aiVideoClip: 10, render: 2, transcribe: 1},
     });
   }),
+
+  // Keep last. Any endpoint from the API design that has no mock yet answers with a clear
+  // error instead of falling through to the dev server (which would return the app's HTML).
+  http.all(url('/*'), ({request}) =>
+    fail(501, 'not_mocked', `The mock API has no handler for ${request.method} ${new URL(request.url).pathname} yet.`),
+  ),
 ];

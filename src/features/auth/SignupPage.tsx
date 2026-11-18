@@ -3,6 +3,7 @@ import {ArrowRight, Lock, Mail, User as UserIcon} from 'lucide-react';
 import {useState} from 'react';
 import {useForm} from 'react-hook-form';
 import {Link, useNavigate} from 'react-router-dom';
+import {ApiError} from '@/api/client';
 import {useSignup} from '@/api/hooks';
 import {AuthHeading, AuthLayout} from '@/components/layout/AuthLayout';
 import {Button} from '@/components/ui/Button';
@@ -24,6 +25,7 @@ export function SignupPage() {
   const navigate = useNavigate();
   const signup = useSignup();
   const [formError, setFormError] = useState<string | null>(null);
+  const [emailTaken, setEmailTaken] = useState(false);
   const {register, handleSubmit, setError, watch, formState} = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {name: '', email: '', password: ''},
@@ -32,10 +34,15 @@ export function SignupPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
+    setEmailTaken(false);
     try {
       await signup.mutateAsync(values);
       navigate('/verify', {replace: true});
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'email_taken') {
+        setEmailTaken(true);
+        return;
+      }
       setFormError(applyApiError(e, setError, ['name', 'email', 'password']));
     }
   });
@@ -46,6 +53,19 @@ export function SignupPage() {
       {formError ? (
         <Notice tone="error" className="mb-4">
           {formError}
+        </Notice>
+      ) : null}
+      {emailTaken ? (
+        <Notice tone="error" className="mb-4">
+          An account with this email already exists.{' '}
+          <Link to="/login" className="font-semibold text-white underline underline-offset-2">
+            Log in
+          </Link>{' '}
+          or{' '}
+          <Link to="/forgot" className="font-semibold text-white underline underline-offset-2">
+            reset your password
+          </Link>
+          .
         </Notice>
       ) : null}
       <form onSubmit={onSubmit} noValidate className="space-y-4">

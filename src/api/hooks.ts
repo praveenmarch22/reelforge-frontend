@@ -33,13 +33,25 @@ export const useLogin = () => useAuthMutation<{email: string; password: string}>
 export const useSignup = () => useAuthMutation<{name: string; email: string; password: string}>('/auth/signup');
 export const useVerifyEmail = () => useAuthMutation<{token: string}>('/auth/verify-email');
 
-export function useLogout() {
+/**
+ * Logs out, then loads `redirectTo` with a full page load so no cached data or
+ * router state from the old session survives. If the request fails, the user
+ * stays signed in and the caller shows the error.
+ */
+export function useLogout(redirectTo = '/login') {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api<void>('/auth/logout', {method: 'POST'}),
-    onSettled: () => {
-      qc.setQueryData(ME, null);
-      qc.removeQueries({predicate: (q) => q.queryKey[0] !== 'me'});
+    mutationFn: async () => {
+      try {
+        await api<void>('/auth/logout', {method: 'POST'});
+      } catch (e) {
+        // Already signed out on the server: that is the result we wanted.
+        if (!(e instanceof ApiError && e.status === 401)) throw e;
+      }
+    },
+    onSuccess: () => {
+      qc.clear();
+      window.location.assign(redirectTo);
     },
   });
 }
@@ -50,11 +62,15 @@ export const useResendVerification = () =>
 export const useForgotPassword = () =>
   useMutation({mutationFn: (body: {email: string}) => api<void>('/auth/forgot-password', {method: 'POST', body})});
 
-export const useResetPassword = () =>
-  useMutation({
+export function useResetPassword() {
+  const qc = useQueryClient();
+  return useMutation({
     mutationFn: (body: {token: string; password: string}) =>
       api<void>('/auth/reset-password', {method: 'POST', body}),
+    // A reset revokes every session, including this browser's if it was signed in.
+    onSuccess: () => qc.setQueryData(ME, null),
   });
+}
 
 export type ProjectFilters = {status?: string; q?: string; limit?: number};
 

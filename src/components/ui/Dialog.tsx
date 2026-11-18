@@ -40,7 +40,7 @@ export function Dialog({open, onClose, title, description, children}: Props) {
           {title}
         </h2>
         {description ? (
-          <p id={descriptionId} className="mt-1.5 text-sm text-muted">
+          <p id={descriptionId} className="mt-1.5 break-words text-sm text-muted [overflow-wrap:anywhere]">
             {description}
           </p>
         ) : null}

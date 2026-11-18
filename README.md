@@ -1,6 +1,6 @@
 # ReelForge web app
 
-React + TypeScript + Vite + Tailwind. Runs with no backend: a mock API in the browser (MSW) answers every `/api/v1` request the way [API_DESIGN.md](https://github.com/praveenmarch22/reelforge-backend/blob/main/docs/API_DESIGN.md) describes.
+React + TypeScript + Vite + Tailwind. Runs with no backend: a mock API in the browser (MSW) answers the `/api/v1` requests the built screens use (13 of the 70 endpoints so far; the rest return a `501 not_mocked` error), the way [API_DESIGN.md](https://github.com/praveenmarch22/reelforge-backend/blob/main/docs/API_DESIGN.md) describes.
 
 ## Run
 
@@ -20,6 +20,11 @@ Open http://localhost:5173.
 | `npm run typecheck` | TypeScript check |
 | `npm run build` | Type-check, then production build into `dist/` |
 | `npm run preview` | Serve the production build |
+| `npm test` | Unit and component tests (Vitest, Testing Library) |
+| `npm run test:e2e` | Browser tests (Playwright, Chromium). Starts the app itself, or reuses a dev server on port 5173 |
+| `npm run test:e2e:ui` | The same tests in Playwright's interactive viewer |
+
+The first time, install the test browser with `npx playwright install chromium`. The same checks run on GitHub on every push (`.github/workflows/ci.yml`).
 
 ## Mock mode
 

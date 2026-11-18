@@ -37,6 +37,25 @@ async function send(path: string, {method = 'GET', body, idempotencyKey}: Option
   }
 }
 
+// Endpoints that work without a session. A 401 from these is an answer (for example a wrong
+// password), not an expired session, so they are never refreshed or treated as "signed out".
+const PUBLIC_PATHS = [
+  '/auth/login',
+  '/auth/signup',
+  '/auth/refresh',
+  '/auth/verify-email',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
+const isPublic = (path: string) => PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}?`));
+
+let onUnauthenticated: (() => void) | null = null;
+
+/** Registers what to do when the session turns out to be gone (the app sends the user to login). */
+export function setUnauthenticatedHandler(handler: (() => void) | null): void {
+  onUnauthenticated = handler;
+}
+
 let refreshing: Promise<boolean> | null = null;
 
 /** One shared refresh at a time, so parallel requests don't each rotate the token. */
@@ -53,15 +72,23 @@ function refreshSession(): Promise<boolean> {
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
   let res = await send(path, options);
 
-  if (res.status === 401 && !path.startsWith('/auth/')) {
+  if (res.status === 401 && !isPublic(path)) {
     const body = (await res.clone().json().catch(() => null)) as ApiErrorBody | null;
     if (body?.error.code === 'token_expired' && (await refreshSession())) {
       res = await send(path, options);
     }
+    // Still 401: the session is gone (logged out elsewhere, or the refresh failed).
+    if (res.status === 401) onUnauthenticated?.();
   }
 
   if (res.status === 204) return undefined as T;
-  const data = await res.json().catch(() => null);
+  const isJson = (res.headers.get('Content-Type') ?? '').includes('json');
+  const data = isJson ? await res.json().catch(() => null) : null;
+  if (res.ok && !isJson) {
+    // A successful non-JSON answer means the request never reached the API
+    // (for example the dev server answered with the app's HTML).
+    throw new ApiError(res.status, 'unexpected_response', 'Something went wrong. Please try again.');
+  }
   if (!res.ok) {
     const err = (data as ApiErrorBody | null)?.error;
     throw new ApiError(

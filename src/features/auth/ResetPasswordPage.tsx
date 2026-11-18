@@ -5,7 +5,7 @@ import {useForm} from 'react-hook-form';
 import {Link, useNavigate, useSearchParams} from 'react-router-dom';
 import {useResetPassword} from '@/api/hooks';
 import {AuthHeading, AuthLayout} from '@/components/layout/AuthLayout';
-import {Button} from '@/components/ui/Button';
+import {Button, ButtonLink} from '@/components/ui/Button';
 import {Input} from '@/components/ui/Input';
 import {Notice} from '@/components/ui/Notice';
 import {applyApiError} from './formErrors';
@@ -36,11 +36,9 @@ export function ResetPasswordPage() {
     return (
       <AuthLayout>
         <AuthHeading title="This link didn't work" subtitle="The reset link is missing or incomplete." />
-        <Link to="/forgot">
-          <Button size="lg" fullWidth>
-            Get a new link
-          </Button>
-        </Link>
+        <ButtonLink size="lg" fullWidth to="/forgot">
+          Get a new link
+        </ButtonLink>
       </AuthLayout>
     );
   }

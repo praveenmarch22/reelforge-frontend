@@ -1,4 +1,4 @@
-import {ArrowRight, Sparkles, Zap} from 'lucide-react';
+import {ArrowRight, Plus, Sparkles, Zap} from 'lucide-react';
 import {useState, type FormEvent, type ReactNode} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {useMe, useProjects} from '@/api/hooks';
@@ -46,6 +46,8 @@ function daysUntil(iso: string): number {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 864e5));
 }
 
+const formatDays = (days: number) => (days === 0 ? 'Today' : days === 1 ? '1 day' : `${days} days`);
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const {data: user} = useMe();
@@ -78,8 +80,9 @@ export function DashboardPage() {
       <section className="glass relative overflow-hidden p-6 sm:p-8" aria-label="Start a new Reel">
         <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-violet/20 blur-3xl" />
         <form onSubmit={onSubmit} className="relative">
-          <div className="ring-brand flex items-center gap-2 rounded-2xl bg-black/40 p-2 shadow-[0_0_50px_-12px_rgba(124,92,255,0.6)]">
-            <Button variant="secondary" size="md" className="shrink-0" onClick={() => goToNewReel({ideas: true})}>
+          {/* On narrow screens the input takes its own row above the two buttons. */}
+          <div className="ring-brand flex flex-wrap items-center gap-2 rounded-2xl bg-black/40 p-2 shadow-[0_0_50px_-12px_rgba(124,92,255,0.6)] sm:flex-nowrap">
+            <Button variant="secondary" size="md" className="order-2 shrink-0 sm:order-1" onClick={() => goToNewReel({ideas: true})}>
               <Sparkles className="h-4 w-4 text-violet-soft" aria-hidden /> Ideas
             </Button>
             <input
@@ -88,9 +91,9 @@ export function DashboardPage() {
               maxLength={300}
               placeholder="What's your next Reel about?"
               aria-label="What's your next Reel about?"
-              className="h-11 min-w-0 flex-1 bg-transparent px-2 text-base text-white placeholder:text-white/35 focus:outline-none"
+              className="order-1 h-11 min-w-0 basis-full bg-transparent px-2 text-base text-white placeholder:text-white/45 focus:outline-none sm:order-2 sm:flex-1 sm:basis-0"
             />
-            <Button type="submit" size="md" className="shrink-0">
+            <Button type="submit" size="md" className="order-3 ml-auto shrink-0">
               Create <Zap className="h-4 w-4" aria-hidden />
             </Button>
           </div>
@@ -111,7 +114,8 @@ export function DashboardPage() {
         </form>
       </section>
 
-      {projects.isError ? (
+      {/* Only when there is nothing to show: one failed background poll keeps the last good data. */}
+      {projects.isError && !projects.data ? (
         <Notice tone="error" className="mt-8">
           We couldn't load your Reels.{' '}
           <button type="button" className="font-semibold text-white underline" onClick={() => void projects.refetch()}>
@@ -126,7 +130,10 @@ export function DashboardPage() {
             ))}
           </div>
           <p className="mt-5 font-display text-lg">Your Reels will appear here</p>
-          <p className="mt-1 text-sm text-muted">Start with one of these, or type your own idea above.</p>
+          <p className="mt-1 text-sm text-muted">Start with one of these ideas, or begin from scratch.</p>
+          <Button className="mt-4" onClick={() => goToNewReel({})}>
+            <Plus className="h-4 w-4" aria-hidden /> Create your first Reel
+          </Button>
           <div className="mt-4 flex flex-wrap gap-2">
             {STARTER_IDEAS.map((idea) => (
               <button
@@ -147,7 +154,7 @@ export function DashboardPage() {
             <StatTile label="Posted" value={counts ? String(counts.posted) : '–'} />
             <StatTile
               label="Credits reset in"
-              value={user ? `${daysUntil(user.credits.resetsAt)} days` : '–'}
+              value={user ? formatDays(daysUntil(user.credits.resetsAt)) : '–'}
               hint={user ? `${user.credits.balance} of ${user.credits.monthlyAllowance} left` : undefined}
             />
           </section>
