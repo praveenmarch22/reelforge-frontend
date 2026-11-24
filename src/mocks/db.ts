@@ -3,7 +3,7 @@
 // Passwords are stored in plain text here because this is fake data in your own browser;
 // the real backend hashes them (see docs/DB_DESIGN.md in the reelforge-backend repository).
 
-import type {Credits, InstagramStatus, ProjectSummary, User} from '@/api/types';
+import type {Credits, InstagramStatus, ProjectSummary, User, Voice} from '@/api/types';
 
 const KEY = 'rf_mock_db_v1';
 export const DEV_LINK_KEY = 'rf_mock_last_link';
@@ -12,6 +12,9 @@ export type DbUser = Omit<User, 'credits' | 'instagram'> & {password: string};
 export type DbToken = {token: string; userId: string; kind: 'verify_email' | 'reset_password'; used: boolean};
 export type DbProject = ProjectSummary & {userId: string};
 
+/** A started "Connect Instagram" attempt, waiting for the (mock) Instagram approval screen. */
+export type DbOAuthState = {state: string; userId: string; returnTo: string; createdAt?: number};
+
 export type Db = {
   users: DbUser[];
   sessionUserId: string | null;
@@ -19,6 +22,8 @@ export type Db = {
   projects: DbProject[];
   credits: Record<string, Credits>;
   instagram: Record<string, InstagramStatus>;
+  /** Added in F4; absent in databases saved by older versions. */
+  oauthStates?: DbOAuthState[];
 };
 
 // Demo account for local testing. Listed in frontend/README.md.
@@ -160,4 +165,131 @@ export function readDevLink(kind: DbToken['kind']): string | null {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------- voices (API D3)
+
+/** A short tone as a WAV data URL. Stands in for a real voice sample in mock mode. */
+function toneDataUrl(frequency: number): string {
+  const rate = 8000;
+  const samples = Math.floor(rate * 0.9);
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const text = (offset: number, value: string) => {
+    for (let i = 0; i < value.length; i++) bytes[offset + i] = value.charCodeAt(i);
+  };
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true); // 8-bit
+  text(36, 'data');
+  view.setUint32(40, samples, true);
+  for (let i = 0; i < samples; i++) {
+    const fade = Math.min(1, i / 400, (samples - i) / 1200);
+    bytes[44 + i] = 128 + Math.round(60 * fade * Math.sin((2 * Math.PI * frequency * i) / rate));
+  }
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
+
+const VOICE_SEED = [
+  {id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', gender: 'Female', accent: 'American', style: 'Warm', tone: 262},
+  {id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', gender: 'Male', accent: 'American', style: 'Deep', tone: 131},
+  {id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', gender: 'Female', accent: 'American', style: 'Soft', tone: 330},
+  {id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', gender: 'Male', accent: 'American', style: 'Calm', tone: 165},
+  {id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', gender: 'Female', accent: 'American', style: 'Energetic', tone: 392},
+  {id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', gender: 'Male', accent: 'American', style: 'Confident', tone: 196},
+] as const;
+
+export function listVoices(): Voice[] {
+  return VOICE_SEED.map(({tone, ...voice}) => ({...voice, provider: 'elevenlabs', previewUrl: toneDataUrl(tone)}));
+}
+
+// ---------------------------------------------------------------- Instagram connect (API F1, F2)
+
+export type InstagramOutcome = 'creator' | 'business' | 'personal_account' | 'denied' | 'not_tester';
+
+export const DEFAULT_RETURN_TO = '/app/settings';
+export const RETURN_TO_MAX_LENGTH = 300;
+export const OAUTH_STATE_MINUTES = 10;
+const FAILED = `${DEFAULT_RETURN_TO}?instagram=error&reason=failed`;
+
+/**
+ * The return address rule from API F1. Only a path inside the web app is accepted; anything
+ * that a browser could read as another site falls back to the default. Browsers treat "\" as
+ * "/" and ignore tabs and line breaks in addresses, so those are refused outright.
+ * The result has no "#fragment" and no leftover instagram/reason parameters.
+ */
+export function safeReturnTo(value: string | null | undefined): string {
+  if (!value || value.length > RETURN_TO_MAX_LENGTH) return DEFAULT_RETURN_TO;
+  // eslint-disable-next-line no-control-regex
+  if (!value.startsWith('/') || value.startsWith('//') || /[\\\u0000-\u001f\u007f]/.test(value)) {
+    return DEFAULT_RETURN_TO;
+  }
+  const base = 'http://app.invalid';
+  let url: URL;
+  try {
+    url = new URL(value, base);
+  } catch {
+    return DEFAULT_RETURN_TO;
+  }
+  if (url.origin !== base) return DEFAULT_RETURN_TO;
+  url.searchParams.delete('instagram');
+  url.searchParams.delete('reason');
+  const result = url.pathname + url.search;
+  // Resolving removes "/./" and "/../", which can leave a "//host" start that was not in the
+  // value as given ("/.//evil.example"). The check is made again on what will be used.
+  if (result.startsWith('//')) return DEFAULT_RETURN_TO;
+  return result;
+}
+
+export function startInstagramConnect(db: Db, userId: string, returnTo: string): string {
+  const state = crypto.randomUUID().replace(/-/g, '');
+  db.oauthStates = [
+    ...(db.oauthStates ?? []).filter((s) => s.userId !== userId),
+    {state, userId, returnTo: safeReturnTo(returnTo), createdAt: Date.now()},
+  ];
+  return state;
+}
+
+/**
+ * What the real backend does in F2 after Instagram redirects back: checks the state,
+ * stores the account (or not), and returns where to send the browser.
+ */
+export function finishInstagramConnect(state: string, outcome: InstagramOutcome, username: string): string {
+  const db = loadDb();
+  const pending = (db.oauthStates ?? []).find((s) => s.state === state);
+  if (!pending) return FAILED;
+  db.oauthStates = (db.oauthStates ?? []).filter((s) => s.state !== state); // one use only
+
+  const expired = Date.now() - (pending.createdAt ?? 0) > OAUTH_STATE_MINUTES * 60_000;
+  // The person approving must be the signed-in user who started the connection.
+  const wrongUser = db.sessionUserId !== pending.userId;
+  if (expired || wrongUser) {
+    saveDb(db);
+    return FAILED;
+  }
+
+  const url = new URL(safeReturnTo(pending.returnTo), 'http://app.invalid');
+  if (outcome === 'creator' || outcome === 'business') {
+    db.instagram[pending.userId] = {
+      connected: true,
+      username: username.trim().replace(/^@/, '') || 'your_handle',
+      status: 'connected',
+      expiresAt: daysFromNow(60),
+    };
+    url.searchParams.set('instagram', 'connected');
+  } else {
+    url.searchParams.set('instagram', 'error');
+    url.searchParams.set('reason', outcome);
+  }
+  saveDb(db);
+  return url.pathname + url.search;
 }

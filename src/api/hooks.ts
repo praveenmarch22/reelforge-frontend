@@ -1,6 +1,6 @@
 import {keepPreviousData, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {api, ApiError} from './client';
-import type {ProjectList, User} from './types';
+import type {ProjectList, User, Voice} from './types';
 
 const ME = ['me'] as const;
 
@@ -69,6 +69,48 @@ export function useResetPassword() {
       api<void>('/auth/reset-password', {method: 'POST', body}),
     // A reset revokes every session, including this browser's if it was signed in.
     onSuccess: () => qc.setQueryData(ME, null),
+  });
+}
+
+export type ProfileUpdate = {
+  name?: string;
+  niche?: string;
+  defaults?: Partial<User['defaults']>;
+  onboardingCompleted?: true;
+};
+
+/** A10: updates the profile and keeps the cached user in step. */
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProfileUpdate) => api<{user: User}>('/me', {method: 'PATCH', body}),
+    onSuccess: ({user}) => qc.setQueryData(ME, user),
+  });
+}
+
+/** D3: the curated voice list. It rarely changes, so it is cached for the session. */
+export function useVoices() {
+  return useQuery({
+    queryKey: ['voices'],
+    queryFn: async () => (await api<{items: Voice[]}>('/voices')).items,
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * F1: asks the API where to send the browser to connect Instagram, then goes there.
+ * `returnTo` is the app page Instagram's redirect should end on.
+ */
+export function useConnectInstagram() {
+  return useMutation({
+    mutationFn: async (returnTo: string) => {
+      const {authorizeUrl} = await api<{authorizeUrl: string}>(
+        `/instagram/connect?returnTo=${encodeURIComponent(returnTo)}`,
+      );
+      // The page is now leaving. The caller keeps its button busy until it does; the request
+      // itself is finished, so nothing is left pending if the visitor comes back.
+      window.location.assign(authorizeUrl);
+    },
   });
 }
 

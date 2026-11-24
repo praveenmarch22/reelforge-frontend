@@ -61,6 +61,19 @@ export type ProjectList = {
   counts: {total: number; posted: number};
 };
 
+export type Voice = {
+  id: string;
+  name: string;
+  provider: string;
+  gender: string;
+  accent: string;
+  style: string;
+  previewUrl: string;
+};
+
+/** Why connecting Instagram failed, from the `reason` query parameter after the redirect (API F2). */
+export type InstagramErrorReason = 'personal_account' | 'denied' | 'not_tester' | 'failed';
+
 export type ApiErrorBody = {
   error: {code: string; message: string; details?: Record<string, unknown>};
 };

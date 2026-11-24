@@ -1,4 +1,5 @@
 import {expect, type Locator, type Page} from '@playwright/test';
+import type {User} from '../src/api/types';
 import {DEMO_EMAIL, DEMO_PASSWORD} from '../src/mocks/db';
 
 export {DEMO_EMAIL, DEMO_PASSWORD};
@@ -46,6 +47,99 @@ export async function signUp(page: Page, user = NEW_USER) {
   await expect(h1(page)).toHaveText('Check your inbox');
 }
 
+// --- Onboarding (F4) ---------------------------------------------------------------------------
+// A new account that verifies its email is sent to /onboarding before it can use the app.
+
+export const ONBOARDING_STEPS = {
+  1: {label: 'Niche', title: 'What do you post about?'},
+  2: {label: 'Voice', title: 'Pick your voice'},
+  3: {label: 'Instagram', title: 'Connect Instagram'},
+} as const;
+export type OnboardingStep = keyof typeof ONBOARDING_STEPS;
+
+export const setupSteps = (page: Page) => page.getByRole('list', {name: 'Setup steps'});
+/** The entry of the stepper that is marked as the current step. */
+export const currentSetupStep = (page: Page) => setupSteps(page).locator('[aria-current="step"]');
+
+/** This onboarding step is on screen, and the stepper says so. */
+export async function expectOnboardingStep(page: Page, step: OnboardingStep, title: string = ONBOARDING_STEPS[step].title) {
+  await expect(page).toHaveURL(/\/onboarding(\?|$)/);
+  await expect(h1(page)).toHaveText(title);
+  await expect(currentSetupStep(page)).toHaveCount(1);
+  await expect(currentSetupStep(page)).toContainText(ONBOARDING_STEPS[step].label);
+}
+
+/** On the "check your inbox" screen: opens the emailed link. A newly verified account lands on onboarding step 1. */
+export async function openVerificationLink(page: Page) {
+  await page.getByRole('link', {name: 'Open the verification link'}).click();
+  await expectOnboardingStep(page, 1);
+}
+
+/** On any onboarding step: leaves the setup with "Skip setup" and waits for the dashboard. */
+export async function skipSetup(page: Page) {
+  await page.getByRole('button', {name: 'Skip setup'}).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(h1(page)).toHaveText(/^Welcome, /);
+}
+
+/** The page title while this onboarding step is on screen. */
+export const onboardingTitle = (step: OnboardingStep) => `${ONBOARDING_STEPS[step].label} · ReelForge setup`;
+
+/** Signs up, verifies the email, and stops on the given onboarding step (later steps are reached with "Skip for now"). */
+export async function startOnboarding(page: Page, step: OnboardingStep = 1, user = NEW_USER) {
+  await signUp(page, user);
+  await openVerificationLink(page);
+  for (let at = 1; at < step; at++) {
+    await page.getByRole('button', {name: 'Skip for now'}).click();
+    await expectOnboardingStep(page, (at + 1) as OnboardingStep);
+  }
+}
+
+/** The signed-in user as the API reports it. */
+export async function currentUser(page: Page): Promise<User> {
+  return (await apiGet<{user: User}>(page, '/me')).user;
+}
+
+/**
+ * Changes the signed-in user's profile through the API (A10), the way Settings or another client
+ * would. The open page does not know about it; reload to see the change.
+ */
+export async function patchProfile(page: Page, body: {niche?: string; defaults?: Partial<User['defaults']>}): Promise<User> {
+  const result = await page.evaluate(async (b) => {
+    const res = await fetch('/api/v1/me', {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)});
+    return {status: res.status, body: (await res.json()) as {user: User}};
+  }, body);
+  expect(result.status, 'PATCH /me').toBe(200);
+  return result.body.user;
+}
+
+/** Ends the session the way an expired one ends; the setup screens have no log-out control. */
+export async function endSession(page: Page) {
+  await page.evaluate(() => fetch('/api/v1/auth/logout', {method: 'POST'}));
+}
+
+/** One entry of the setup stepper, by its position (1 to 3). */
+export const setupStep = (page: Page, step: OnboardingStep) => setupSteps(page).getByRole('listitem').nth(step - 1);
+
+/**
+ * What the stepper says about a step other than the current one.
+ * done: the choice is saved (a tick instead of the number, and "(done)" for screen readers).
+ * skipped: passed without saving (the number, and "(skipped)" for screen readers).
+ * ahead: not reached and nothing saved (the number only).
+ */
+export async function expectSetupStepState(page: Page, step: OnboardingStep, state: 'done' | 'skipped' | 'ahead' | 'current') {
+  const {label} = ONBOARDING_STEPS[step];
+  const text = {
+    done: new RegExp(`^${label} ?\\(done\\)$`),
+    skipped: new RegExp(`^${step} ?${label} ?\\(skipped\\)$`),
+    ahead: new RegExp(`^${step} ?${label}$`),
+    current: new RegExp(`^${step} ?${label}$`),
+  }[state];
+  await expect(setupStep(page, step), `step ${step} (${label}) is shown as ${state}`).toHaveText(text);
+  if (state === 'current') await expect(setupStep(page, step)).toHaveAttribute('aria-current', 'step');
+  else await expect(setupStep(page, step)).not.toHaveAttribute('aria-current');
+}
+
 export async function openProjects(page: Page) {
   await page.getByRole('navigation', {name: 'Main'}).getByRole('link', {name: 'Projects'}).click();
   await expect(h1(page)).toHaveText('Your Reels');
@@ -61,7 +155,42 @@ export async function expectReels(page: Page, titles: string[]) {
   for (const title of titles) await expect(reelCard(page, title)).toBeVisible();
 }
 
-export const deleteDialog = (page: Page) => page.getByRole('dialog', {name: 'Delete this Reel?'});
+/**
+ * Keeps the Reels that are generating where they are. Call before the first page.goto of the test.
+ *
+ * The mock API moves a generating Reel forward by a few percent on every GET /projects and makes it
+ * "ready" at 100%, and the app polls every 2 seconds while one is generating. A test that needs the
+ * Reel to still be generating would otherwise depend on how many polls fit in before its assertion,
+ * that is, on how fast the machine is. With this, each poll starts from the progress the Reel had
+ * when the page first asked, so its status never changes. The mock database is read and written
+ * through the app's own module (the dev server serves it), not through a copied storage key.
+ */
+export async function holdGeneratingReels(page: Page) {
+  await page.addInitScript(() => {
+    type MockDb = {projects: {id: string; status: string; progress: number | null}[]};
+    type MockDbModule = {loadDb: () => MockDb; saveDb: (db: MockDb) => void};
+    const modulePath = '/src/mocks/db.ts';
+    const held = new Map<string, number>();
+    const realFetch = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+      if (method === 'GET' && new URL(href, location.href).pathname === '/api/v1/projects') {
+        const {loadDb, saveDb} = (await import(/* @vite-ignore */ modulePath)) as MockDbModule;
+        const db = loadDb();
+        for (const p of db.projects) {
+          if (p.status !== 'generating') continue;
+          if (!held.has(p.id)) held.set(p.id, p.progress ?? 0);
+          p.progress = held.get(p.id) ?? 0;
+        }
+        saveDb(db);
+      }
+      return realFetch(input, init);
+    };
+  });
+}
+
+export const deleteDialog =(page: Page) => page.getByRole('dialog', {name: 'Delete this Reel?'});
 
 /** Opens the delete confirmation for the Reel with this title, from its options menu. */
 export async function askToDelete(page: Page, title: string) {
@@ -147,14 +276,20 @@ export type Fault = {
   /** How many matching requests to affect; all of them when left out. */
   times?: number;
   delayMs?: number;
+  /**
+   * Keeps the request waiting until the test calls releaseHeldRequests, then lets it through (or answers
+   * with status). For checking what the screen does while a request is in flight, however slow the machine is.
+   */
+  hold?: boolean;
 };
 
 const FAULTS_KEY = '__rf_test_faults';
+const RELEASE_KEY = '__rf_test_release';
 
 /** Call once, before the first page.goto of the test. */
 export async function installFaultInjection(page: Page) {
-  await page.addInitScript((key) => {
-    type Rule = {method: string; path: string; status?: number; code?: string; message?: string; body?: unknown; times?: number; delayMs?: number; hits?: number};
+  await page.addInitScript(([key, releaseKey]) => {
+    type Rule = {method: string; path: string; status?: number; code?: string; message?: string; body?: unknown; times?: number; delayMs?: number; hold?: boolean; hits?: number};
     const realFetch = window.fetch.bind(window);
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -176,6 +311,12 @@ export async function installFaultInjection(page: Page) {
       rule.hits = (rule.hits ?? 0) + 1;
       sessionStorage.setItem(key, JSON.stringify(rules));
       if (rule.delayMs) await new Promise((resolve) => setTimeout(resolve, rule.delayMs));
+      if (rule.hold) {
+        await new Promise<void>((resolve) => {
+          const check = () => (sessionStorage.getItem(releaseKey) ? resolve() : void setTimeout(check, 25));
+          check();
+        });
+      }
       if (rule.status === undefined) return realFetch(input, init);
       if (rule.status === 0) throw new TypeError('Failed to fetch');
       const body = rule.body ?? {
@@ -183,12 +324,23 @@ export async function installFaultInjection(page: Page) {
       };
       return new Response(JSON.stringify(body), {status: rule.status, headers: {'Content-Type': 'application/json'}});
     };
-  }, FAULTS_KEY);
+  }, [FAULTS_KEY, RELEASE_KEY] as const);
 }
 
 /** Replaces the active faults. They live in the tab's sessionStorage, so they survive reloads. Pass [] to clear. */
 export async function setFaults(page: Page, faults: Fault[]) {
-  await page.evaluate(([key, value]) => sessionStorage.setItem(key, value), [FAULTS_KEY, JSON.stringify(faults)] as const);
+  await page.evaluate(
+    ([key, value, releaseKey]) => {
+      sessionStorage.removeItem(releaseKey);
+      sessionStorage.setItem(key, value);
+    },
+    [FAULTS_KEY, JSON.stringify(faults), RELEASE_KEY] as const,
+  );
+}
+
+/** Lets the requests that a fault with `hold` is keeping back go on their way. */
+export async function releaseHeldRequests(page: Page) {
+  await page.evaluate((releaseKey) => sessionStorage.setItem(releaseKey, '1'), RELEASE_KEY);
 }
 
 /** How many requests the fault at this position has caught so far. */

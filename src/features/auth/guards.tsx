@@ -24,6 +24,30 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
+/**
+ * App pages: a verified user who hasn't been through first-run setup is sent there once.
+ * Unverified users are not (they see the "verify your email" banner first; PRD flow 1).
+ */
+export function OnboardingGate() {
+  const {data: user} = useMe();
+  const {search} = useLocation();
+  if (user?.emailVerified && !user.onboardingCompleted) {
+    // An Instagram connection that failed outright comes back to the default page
+    // (/app/settings?instagram=error...). Carry that result into setup's Instagram step
+    // instead of dropping it, so the failure is shown.
+    const result = new URLSearchParams(search);
+    const instagram = result.get('instagram');
+    if (instagram) {
+      const next = new URLSearchParams({step: '3', instagram});
+      const reason = result.get('reason');
+      if (reason) next.set('reason', reason);
+      return <Navigate to={`/onboarding?${next}`} replace />;
+    }
+    return <Navigate to="/onboarding" replace />;
+  }
+  return <Outlet />;
+}
+
 /** Login, sign-up and password pages: signed-in users go straight to the app. */
 export function GuestOnly() {
   const {data: user, isPending, isError, refetch} = useMe();

@@ -6,6 +6,7 @@ import {
   DEMO_REELS,
   expectReels,
   h1,
+  holdGeneratingReels,
   loginAsDemo,
   openProjects,
   reelCard,
@@ -20,6 +21,9 @@ const search = (page: Page) => page.getByRole('searchbox', {name: 'Search Reels'
 
 test.describe('projects library', () => {
   test.beforeEach(async ({page}) => {
+    // These tests are about the list, the filters and delete, not about a Reel finishing: the one
+    // that is generating must not turn "Ready" under them on a slow run (dashboard.spec.ts covers that).
+    await holdGeneratingReels(page);
     await loginAsDemo(page);
     await openProjects(page);
   });

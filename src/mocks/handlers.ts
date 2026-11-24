@@ -4,7 +4,18 @@
 import {delay, http, HttpResponse} from 'msw';
 import {API_URL} from '@/lib/env';
 import type {ProjectStatus} from '@/api/types';
-import {createUser, issueToken, loadDb, saveDb, toUser, type Db, type DbUser} from './db';
+import {
+  createUser,
+  issueToken,
+  listVoices,
+  loadDb,
+  safeReturnTo,
+  saveDb,
+  startInstagramConnect,
+  toUser,
+  type Db,
+  type DbUser,
+} from './db';
 
 const url = (path: string) => `${API_URL}${path}`;
 const LATENCY_MS = 350;
@@ -230,6 +241,30 @@ export const handlers = [
       ...toUser(db, user).credits,
       costs: {script: 1, voicePer30s: 2, aiImage: 1, aiVideoClip: 10, render: 2, transcribe: 1},
     });
+  }),
+
+  // D3
+  http.get(url('/voices'), async () => {
+    await delay(LATENCY_MS);
+    const db = loadDb();
+    if (!currentUser(db)) return unauthenticated();
+    return HttpResponse.json({items: listVoices()});
+  }),
+
+  // F1. The real API answers with Instagram's authorization page; the mock sends the
+  // browser to a stand-in page inside the app (src/mocks/MockInstagramPage.tsx).
+  http.get(url('/instagram/connect'), async ({request}) => {
+    await delay(LATENCY_MS);
+    const db = loadDb();
+    const user = currentUser(db);
+    if (!user) return unauthenticated();
+    if (!user.emailVerified) {
+      return fail(403, 'email_not_verified', 'Verify your email before connecting Instagram.');
+    }
+    const returnTo = safeReturnTo(new URL(request.url).searchParams.get('returnTo'));
+    const state = startInstagramConnect(db, user.id, returnTo);
+    saveDb(db);
+    return HttpResponse.json({authorizeUrl: `/mock/instagram?state=${state}`});
   }),
 
   // Keep last. Any endpoint from the API design that has no mock yet answers with a clear

@@ -1,18 +1,23 @@
 import {expect, test} from '@playwright/test';
 import {
+  currentUser,
   DEMO_EMAIL,
   DEMO_PASSWORD,
   emailField,
+  expectOnboardingStep,
   h1,
   loginAsDemo,
   logOut,
   NEW_USER,
   passwordField,
   signUp,
+  skipSetup,
   submitLogin,
 } from './helpers';
 
 // PRD 5.1 (A1, A2), flow 1, edge cases 11.1; API_DESIGN.md A1-A9.
+// Since F4 a newly verified account lands on onboarding (PRD flow 1 step 4), not on the dashboard.
+// Tests that go on to the app leave the setup with "Skip setup"; onboarding itself is in onboarding*.spec.ts.
 
 const VERIFY_BANNER = 'Verify your email to start creating Reels.';
 const LINK_EXPIRED = 'This link has expired or was already used.';
@@ -34,14 +39,18 @@ test.describe('signed out', () => {
 });
 
 test.describe('sign up and verify email', () => {
-  test('sign up, open the verification link, and land in the app verified', async ({page}) => {
+  test('sign up, open the verification link, and land on onboarding verified; the app then shows no verify banner', async ({page}) => {
     await signUp(page);
     await expect(page).toHaveURL(/\/verify$/);
     await expect(page.getByText(`We sent a verification link to ${NEW_USER.email}.`)).toBeVisible();
 
     await page.getByRole('link', {name: 'Open the verification link'}).click();
 
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await expectOnboardingStep(page, 1);
+    expect((await currentUser(page)).emailVerified).toBe(true);
+
+    await skipSetup(page);
     await expect(h1(page)).toHaveText('Welcome, Asha');
     await expect(page.getByRole('link', {name: '100 of 100 credits left'})).toBeVisible();
     await expect(page.getByText(VERIFY_BANNER)).toHaveCount(0);
@@ -52,13 +61,14 @@ test.describe('sign up and verify email', () => {
     await expect(page.getByText(VERIFY_BANNER)).toHaveCount(0);
   });
 
-  /** Signs up, verifies with the emailed link, and returns that (now used) link. */
+  /** Signs up, verifies with the emailed link, skips the setup, and returns that (now used) link. */
   async function signUpAndVerify(page: import('@playwright/test').Page): Promise<string> {
     await signUp(page);
     const link = page.getByRole('link', {name: 'Open the verification link'});
     const href = (await link.getAttribute('href'))!;
     await link.click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expectOnboardingStep(page, 1);
+    await skipSetup(page);
     await expect(h1(page)).toHaveText('Welcome, Asha');
     return href;
   }
@@ -138,7 +148,8 @@ test.describe('sign up and verify email', () => {
     const newLink = page.getByRole('link', {name: 'Open the verification link'});
     await expect(newLink).not.toHaveAttribute('href', firstHref!);
     await page.goto((await newLink.getAttribute('href'))!);
-    await expect(page).toHaveURL(/\/app$/);
+    await expectOnboardingStep(page, 1);
+    await skipSetup(page);
     await expect(h1(page)).toHaveText('Welcome, Asha');
     await expect(page.getByText(VERIFY_BANNER)).toHaveCount(0);
   });
@@ -152,7 +163,8 @@ test.describe('sign up and verify email', () => {
 
     await page.getByRole('link', {name: 'Open the verification link'}).click();
 
-    await expect(page).toHaveURL(/\/app$/);
+    await expectOnboardingStep(page, 1);
+    await skipSetup(page);
     await expect(h1(page)).toHaveText('Welcome, Asha');
     await expect(page.getByText(VERIFY_BANNER)).toHaveCount(0);
   });
@@ -281,7 +293,8 @@ test.describe('unverified account', () => {
     await expect(page.getByText('Sent. It can take a minute to arrive.')).toBeVisible();
     await expect(link).not.toHaveAttribute('href', firstHref);
     await link.click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expectOnboardingStep(page, 1);
+    await skipSetup(page);
     await expect(h1(page)).toHaveText('Welcome, Asha');
     await expect(page.getByText(VERIFY_BANNER)).toHaveCount(0);
   });

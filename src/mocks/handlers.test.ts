@@ -1,10 +1,10 @@
 import {setupServer} from 'msw/node';
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import {DEMO_EMAIL, DEMO_PASSWORD, readDevLink} from './db';
+import {DEMO_EMAIL, DEMO_PASSWORD, finishInstagramConnect, readDevLink} from './db';
 import {handlers} from './handlers';
 
 // The mock API is the contract the screens are built against, so it is checked against
-// API_DESIGN.md (endpoints A1-A10, B2, B6, H1). Simulated latency is not part of the contract.
+// API_DESIGN.md (endpoints A1-A10, B2, B6, D3, F1, H1). Simulated latency is not part of the contract.
 vi.mock('msw', async (importOriginal) => ({
   ...(await importOriginal<typeof import('msw')>()),
   delay: () => Promise.resolve(),
@@ -444,6 +444,167 @@ describe('endpoints that are not mocked yet', () => {
     expect(res.status).toBe(501);
     expect(res.body.error.code).toBe('not_mocked');
     expect(res.body.error.message).toContain(`${method} /api/v1${path}`);
+  });
+});
+
+describe('D3 GET /voices', () => {
+  it('needs a signed-in user', async () => {
+    const res = await get('/voices');
+
+    expect([res.status, res.body.error.code]).toEqual([401, 'not_authenticated']);
+  });
+
+  it('returns the curated voices in the documented shape', async () => {
+    await loginDemo();
+
+    const {status, body} = await get('/voices');
+
+    expect(status).toBe(200);
+    expect(Object.keys(body)).toEqual(['items']);
+    expect(body.items).toHaveLength(6);
+    for (const voice of body.items) {
+      expect(Object.keys(voice).sort()).toEqual(['accent', 'gender', 'id', 'name', 'previewUrl', 'provider', 'style']);
+      expect(voice.provider).toBe('elevenlabs');
+      for (const key of ['id', 'name', 'gender', 'accent', 'style', 'previewUrl']) expect(voice[key], key).toEqual(expect.any(String));
+      expect(voice.previewUrl).not.toBe('');
+    }
+    expect(new Set(body.items.map((v: {id: string}) => v.id)).size).toBe(6);
+  });
+
+  it('is available to an unverified user too (the endpoint is "User", not "Verified")', async () => {
+    await signUp();
+
+    expect((await get('/voices')).status).toBe(200);
+  });
+});
+
+describe('F1 GET /instagram/connect', () => {
+  const verifiedNewUser = async () => {
+    await signUp();
+    await post('/auth/verify-email', {token: lastToken('verify_email')});
+  };
+  const stateOf = (authorizeUrl: string) => new URL(authorizeUrl, location.origin).searchParams.get('state')!;
+  const connect = (returnTo?: string) =>
+    get(`/instagram/connect${returnTo === undefined ? '' : `?returnTo=${encodeURIComponent(returnTo)}`}`);
+
+  it('needs a signed-in user', async () => {
+    const res = await connect('/onboarding?step=3');
+
+    expect([res.status, res.body.error.code]).toEqual([401, 'not_authenticated']);
+  });
+
+  it('answers 403 email_not_verified for an unverified user', async () => {
+    await signUp();
+
+    const res = await connect('/onboarding?step=3');
+
+    expect([res.status, res.body.error.code]).toEqual([403, 'email_not_verified']);
+    expect(typeof res.body.error.message).toBe('string');
+  });
+
+  it('gives a verified user an authorizeUrl that carries a state', async () => {
+    await verifiedNewUser();
+
+    const res = await connect('/onboarding?step=3');
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body)).toEqual(['authorizeUrl']);
+    expect(stateOf(res.body.authorizeUrl)).toMatch(/\S{16,}/);
+  });
+
+  it('issues a different state for every attempt', async () => {
+    await verifiedNewUser();
+
+    const first = stateOf((await connect('/onboarding?step=3')).body.authorizeUrl);
+    const second = stateOf((await connect('/onboarding?step=3')).body.authorizeUrl);
+
+    expect(second).not.toBe(first);
+  });
+
+  it('the state carries returnTo: finishing the connection returns to that page and /me shows the account', async () => {
+    await verifiedNewUser();
+    const {body} = await connect('/onboarding?step=3');
+
+    const destination = finishInstagramConnect(stateOf(body.authorizeUrl), 'creator', 'asha_creates');
+
+    expect(destination).toBe('/onboarding?step=3&instagram=connected');
+    expect((await get('/me')).body.user.instagram).toMatchObject({connected: true, username: 'asha_creates', status: 'connected'});
+  });
+
+  it('returns to /app/settings when returnTo is left out', async () => {
+    await verifiedNewUser();
+    const {body} = await connect();
+
+    expect(finishInstagramConnect(stateOf(body.authorizeUrl), 'denied', 'asha_creates')).toBe(
+      '/app/settings?instagram=error&reason=denied',
+    );
+  });
+
+  it.each([
+    '//evil.example',
+    'https://evil.example/onboarding',
+    'onboarding',
+    '',
+    '/\\evil.example',
+    '/\t/evil.example',
+    '/\n/evil.example',
+    `/app/projects?q=${'x'.repeat(300)}`,
+  ])(
+    'ignores the returnTo %j, which is not an acceptable path inside the app, and uses /app/settings',
+    async (returnTo) => {
+      await verifiedNewUser();
+      const {status, body} = await connect(returnTo);
+
+      expect(status).toBe(200);
+      expect(finishInstagramConnect(stateOf(body.authorizeUrl), 'creator', 'asha_creates')).toBe(
+        '/app/settings?instagram=connected',
+      );
+    },
+  );
+});
+
+describe('F1 and F2 together: the rules of the connect round trip, through the API', () => {
+  const stateOf = (authorizeUrl: string) => new URL(authorizeUrl, location.origin).searchParams.get('state')!;
+  const startAsNewUser = async (returnTo: string) => {
+    await signUp();
+    await post('/auth/verify-email', {token: lastToken('verify_email')});
+    const {body} = await get(`/instagram/connect?returnTo=${encodeURIComponent(returnTo)}`);
+    return stateOf(body.authorizeUrl);
+  };
+  const NOT_CONNECTED = {connected: false, username: null, status: null, expiresAt: null};
+  const FAILED = '/app/settings?instagram=error&reason=failed';
+
+  it('a returnTo that already carries a result, and a fragment, comes back with one result and no fragment', async () => {
+    const state = await startAsNewUser('/onboarding?step=3&instagram=connected&reason=denied#top');
+
+    expect(finishInstagramConnect(state, 'personal_account', 'asha_creates')).toBe(
+      '/onboarding?step=3&instagram=error&reason=personal_account',
+    );
+  });
+
+  // F2: "...and that the signed-in user is the user inside `state`."
+  it("another user who logs in and opens the first user's approval link connects neither account", async () => {
+    const state = await startAsNewUser('/onboarding?step=3');
+    await post('/auth/logout');
+    await loginDemo();
+    const demoBefore = (await get('/me')).body.user.instagram;
+
+    expect(finishInstagramConnect(state, 'creator', 'someone_else')).toBe(FAILED);
+
+    expect((await get('/me')).body.user.instagram).toEqual(demoBefore);
+    await post('/auth/logout');
+    await post('/auth/login', {email: NEW_USER.email, password: NEW_USER.password});
+    expect((await get('/me')).body.user.instagram).toEqual(NOT_CONNECTED);
+  });
+
+  it('after logging out, the approval link connects nothing', async () => {
+    const state = await startAsNewUser('/onboarding?step=3');
+    await post('/auth/logout');
+
+    expect(finishInstagramConnect(state, 'creator', 'asha_creates')).toBe(FAILED);
+
+    await post('/auth/login', {email: NEW_USER.email, password: NEW_USER.password});
+    expect((await get('/me')).body.user.instagram).toEqual(NOT_CONNECTED);
   });
 });
 

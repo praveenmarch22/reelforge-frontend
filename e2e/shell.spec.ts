@@ -45,7 +45,7 @@ test.describe('screens that are not built yet', () => {
     ['/app/p/some-id/render', 'Render'],
     ['/app/p/some-id/publish', 'Publish'],
     ['/app/settings', 'Settings'],
-    ['/onboarding', 'Onboarding'],
+    // /onboarding was in this list until F4 built it; it is covered by onboarding*.spec.ts.
   ]) {
     test(`${path} shows the "${title}" placeholder`, async ({page}) => {
       await loginAsDemo(page);
