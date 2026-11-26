@@ -17,7 +17,8 @@ const starterIdeas = (page: Page) =>
 /** Waits for the New Reel screen and returns its query string. */
 async function newReelParams(page: Page): Promise<Record<string, string>> {
   await expect(page).toHaveURL(/\/app\/new\?/);
-  await expect(h1(page)).toHaveText('New Reel');
+  // F5 built the screen; its heading is "Craft your next Reel" (docs/SCREENS_F5_F6.md section 1).
+  await expect(h1(page)).toHaveText('Craft your next Reel');
   return Object.fromEntries(new URL(page.url()).searchParams);
 }
 

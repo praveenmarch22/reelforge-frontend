@@ -17,12 +17,14 @@ Open http://localhost:5173.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Development server with the mock API |
+| `npm run dev:real` | Development server talking to the real local backend (`docker compose up` in `../backend`): Vite passes `/api` to `http://127.0.0.1:5000` (change it with `API_PROXY_TARGET`). The New Reel and editor screens (F5, F6) are built this way |
 | `npm run typecheck` | TypeScript check |
 | `npm run build` | Type-check, then production build into `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm test` | Unit and component tests (Vitest, Testing Library) |
 | `npm run test:e2e` | Browser tests (Playwright, Chromium). Starts the app itself, or reuses a dev server on port 5173 |
 | `npm run test:e2e:ui` | The same tests in Playwright's interactive viewer |
+| `npx playwright test -c playwright.real.config.ts` | Browser tests of the full flow against a real backend with mock AI providers (a separate stack on other ports; the config's header says how to start and stop it) |
 
 The first time, install the test browser with `npx playwright install chromium`. The same checks run on GitHub on every push (`.github/workflows/ci.yml`).
 

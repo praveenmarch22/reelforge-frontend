@@ -164,7 +164,7 @@ test.describe('projects library', () => {
     await page.getByRole('link', {name: 'New Reel'}).first().click();
 
     await expect(page).toHaveURL(/\/app\/new$/);
-    await expect(h1(page)).toHaveText('New Reel');
+    await expect(h1(page)).toHaveText('Craft your next Reel');
   });
 });
 

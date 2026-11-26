@@ -9,6 +9,8 @@ import {ResetPasswordPage} from '@/features/auth/ResetPasswordPage';
 import {SignupPage} from '@/features/auth/SignupPage';
 import {VerifyEmailPage} from '@/features/auth/VerifyEmailPage';
 import {DashboardPage} from '@/features/dashboard/DashboardPage';
+import {NewReelPage} from '@/features/create/NewReelPage';
+import {ScriptEditorPage} from '@/features/create/ScriptEditorPage';
 import {ComingSoon, NotFound} from '@/features/misc/ComingSoon';
 import {OnboardingPage} from '@/features/onboarding/OnboardingPage';
 import {ProjectsPage} from '@/features/projects/ProjectsPage';
@@ -49,8 +51,8 @@ export function App() {
           <Route element={<AppShell />}>
             <Route path="/app" element={<DashboardPage />} />
             <Route path="/app/projects" element={<ProjectsPage />} />
-            <Route path="/app/new" element={<ComingSoon title="New Reel" milestone="F5" />} />
-            <Route path="/app/p/:id/script" element={<ComingSoon title="Script editor" milestone="F5" />} />
+            <Route path="/app/new" element={<NewReelPage />} />
+            <Route path="/app/p/:id/script" element={<ScriptEditorPage />} />
             <Route path="/app/p/:id/edit" element={<ComingSoon title="Reel editor" milestone="F6" />} />
             <Route path="/app/p/:id/render" element={<ComingSoon title="Render" milestone="F7" />} />
             <Route path="/app/p/:id/publish" element={<ComingSoon title="Publish" milestone="F7" />} />

@@ -145,6 +145,22 @@ function InstagramPill({user}: {user: User}) {
   );
 }
 
+/** The credits and Instagram pills alone, for screens with their own heading (New Reel, editors). */
+export function TopBar({children}: {children?: ReactNode}) {
+  const {data: user} = useMe();
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">{children}</div>
+      {user ? (
+        <div className="ml-auto flex items-center gap-2.5">
+          <CreditsPill user={user} />
+          <InstagramPill user={user} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Title row used at the top of every app page, with the credits and Instagram pills on the right. */
 export function PageHeader({title, children}: {title: ReactNode; children?: ReactNode}) {
   const {data: user} = useMe();

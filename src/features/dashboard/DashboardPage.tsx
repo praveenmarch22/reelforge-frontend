@@ -1,13 +1,13 @@
 import {ArrowRight, Plus, Sparkles, Zap} from 'lucide-react';
-import {useState, type FormEvent, type ReactNode} from 'react';
+import {useState, type FormEvent} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {useMe, useProjects} from '@/api/hooks';
 import type {Mode} from '@/api/types';
 import {PageHeader} from '@/components/layout/AppShell';
 import {NewReelCard, ReelCard, ReelCardSkeleton} from '@/components/reels/ReelCard';
 import {Button} from '@/components/ui/Button';
+import {Chip} from '@/components/ui/Chip';
 import {Notice} from '@/components/ui/Notice';
-import {cn} from '@/lib/cn';
 
 const LENGTHS = [15, 30, 60, 90] as const;
 const STARTER_IDEAS = [
@@ -15,22 +15,6 @@ const STARTER_IDEAS = [
   'A fact nobody knows about the ocean',
   'How I save 30% of my salary',
 ];
-
-function Chip({active, onClick, children}: {active: boolean; onClick: () => void; children: ReactNode}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        'h-8 rounded-full border px-3.5 text-[13px] font-medium transition',
-        active ? 'border-violet bg-violet/20 text-white' : 'border-line bg-white/[0.03] text-muted hover:text-white',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 function StatTile({label, value, hint}: {label: string; value: string; hint?: string}) {
   return (
