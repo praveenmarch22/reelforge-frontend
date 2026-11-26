@@ -19,5 +19,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
     restoreMocks: true,
+    // The editor's component tests render a lot; a loaded machine (or CI) needs more than 5 s.
+    testTimeout: 15_000,
   },
 });

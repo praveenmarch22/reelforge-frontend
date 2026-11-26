@@ -39,12 +39,12 @@ test.describe('unknown URLs', () => {
 test.describe('screens that are not built yet', () => {
   // Every designed screen has a route and shows the placeholder inside the app shell, not the 404 page.
   for (const [path, title] of [
-    ['/app/p/some-id/edit', 'Reel editor'],
     ['/app/p/some-id/render', 'Render'],
     ['/app/p/some-id/publish', 'Publish'],
     ['/app/settings', 'Settings'],
     // /onboarding was in this list until F4 built it; it is covered by onboarding*.spec.ts.
     // /app/new and /app/p/:id/script were here until F5 built them; see e2e-real/ and src/features/create.
+    // /app/p/:id/edit was here until F6 built it; see e2e-real/reel-editor.spec.ts and src/features/editor.
   ]) {
     test(`${path} shows the "${title}" placeholder`, async ({page}) => {
       await loginAsDemo(page);

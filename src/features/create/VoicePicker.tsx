@@ -1,4 +1,5 @@
 import {Pause, Play} from 'lucide-react';
+import {useId} from 'react';
 import {useVoices} from '@/api/hooks';
 import {useAudioPreview} from '@/lib/useAudioPreview';
 import {cn} from '@/lib/cn';
@@ -15,6 +16,7 @@ export function VoicePicker({
   label?: string;
   disabled?: boolean;
 }) {
+  const id = useId(); // two pickers can share a page (the editor's narrator and this take)
   const voices = useVoices();
   const preview = useAudioPreview();
   const items = voices.data ?? [];
@@ -23,7 +25,7 @@ export function VoicePicker({
 
   return (
     <div>
-      <label htmlFor="voice-picker" className="text-xs font-medium uppercase tracking-wider text-muted">
+      <label htmlFor={id} className="text-xs font-medium uppercase tracking-wider text-muted">
         {label}
       </label>
       <div className="mt-2 flex items-center gap-2 rounded-xl border border-line bg-white/[0.04] p-2">
@@ -31,7 +33,7 @@ export function VoicePicker({
           {chosen?.name[0] ?? '…'}
         </span>
         <select
-          id="voice-picker"
+          id={id}
           value={chosen?.id ?? ''}
           disabled={disabled || !items.length}
           onChange={(e) => onChange(e.target.value)}

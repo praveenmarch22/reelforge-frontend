@@ -94,6 +94,7 @@ function outputOf<T>(job: Job): T {
 /** After anything that changes the project, its credits or its estimate. */
 function refresh(qc: QueryClient, id: string) {
   void qc.invalidateQueries({queryKey: ['project-jobs', id]});
+  void qc.invalidateQueries({queryKey: ['timeline', id]});
   void qc.invalidateQueries({queryKey: projectKey(id)});
   void qc.invalidateQueries({queryKey: estimateKey(id)});
   void qc.invalidateQueries({queryKey: ['credits']});
@@ -303,4 +304,109 @@ export function useLeaveSignal(): () => AbortSignal | undefined {
     return () => c.abort();
   }, []);
   return () => controller.current?.signal;
+}
+
+// ---------------------------------------------------------------- the Reel editor (F6)
+
+export type TimelineAnswer = {
+  timelineVersion: number;
+  timeline: import('@/remotion/types').Timeline;
+  durationSeconds: number;
+  tooLong: boolean;
+  ready: boolean;
+};
+
+/** B12, fetched again whenever the project's timeline version or its scenes' files change. */
+export function useTimeline(id: string, version: string | undefined) {
+  return useQuery({
+    queryKey: ['timeline', id, version],
+    queryFn: () => api<TimelineAnswer>(`/projects/${id}/timeline`),
+    enabled: version !== undefined,
+    placeholderData: (previous) => previous,
+    // Links to the files expire after 2 hours; fetch fresh ones well before.
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+export function useRegenerateVoice(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({sceneId, voiceId, confirmReplaceWords}: {sceneId: string; voiceId?: string; confirmReplaceWords?: boolean}) =>
+      api<{job: Job}>(`/scenes/${sceneId}/voice/regenerate`, {
+        method: 'POST',
+        body: {...(voiceId ? {voiceId} : {}), ...(confirmReplaceWords ? {confirmReplaceWords} : {})},
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    onSuccess: () => refresh(qc, projectId),
+  });
+}
+
+export type VisualChange = Partial<{visualSource: 'stock' | 'ai_image' | 'ai_video'; visualPrompt: string; stockQuery: string}>;
+
+export function useRegenerateVisual(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({sceneId, body}: {sceneId: string; body: VisualChange}) =>
+      api<{job: Job}>(`/scenes/${sceneId}/visual/regenerate`, {
+        method: 'POST',
+        body,
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    onSuccess: () => refresh(qc, projectId),
+  });
+}
+
+export type StockItem = {
+  providerId: string;
+  thumbnailUrl: string;
+  previewUrl: string;
+  durationSeconds: number;
+  width: number;
+  height: number;
+  author: string;
+  source: string;
+  pageUrl: string;
+};
+
+/** C9: one page of stock clips for a scene (kept for 24 hours by the API). */
+export function useStockSearch(sceneId: string, query: string, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['stock', sceneId, query, page],
+    queryFn: () => {
+      const params = new URLSearchParams({page: String(page)});
+      if (query.trim()) params.set('q', query.trim());
+      return api<{items: StockItem[]; nextPage: number | null; query: string}>(`/scenes/${sceneId}/stock-search?${params}`);
+    },
+    enabled,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useSelectVisual(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({sceneId, stock}: {sceneId: string; stock: string}) =>
+      api<{job?: Job; scene?: Scene}>(`/scenes/${sceneId}/visual/select`, {method: 'POST', body: {stock}}),
+    onSuccess: () => refresh(qc, projectId),
+  });
+}
+
+export type MusicTrack = {
+  id: string;
+  title: string;
+  durationSeconds: number;
+  moods: Mood[];
+  license: string;
+  sourceUrl: string;
+  previewUrl: string;
+};
+
+/** D4: the music library, all of it or one mood's tracks. */
+export function useMusic(mood?: Mood) {
+  return useQuery({
+    queryKey: ['music', mood ?? 'all'],
+    queryFn: async () => (await api<{items: MusicTrack[]}>(`/music${mood ? `?mood=${mood}` : ''}`)).items,
+    staleTime: 30 * 60 * 1000,
+  });
 }

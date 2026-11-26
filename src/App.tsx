@@ -11,6 +11,7 @@ import {VerifyEmailPage} from '@/features/auth/VerifyEmailPage';
 import {DashboardPage} from '@/features/dashboard/DashboardPage';
 import {NewReelPage} from '@/features/create/NewReelPage';
 import {ScriptEditorPage} from '@/features/create/ScriptEditorPage';
+import {ReelEditorPage} from '@/features/editor/ReelEditorPage';
 import {ComingSoon, NotFound} from '@/features/misc/ComingSoon';
 import {OnboardingPage} from '@/features/onboarding/OnboardingPage';
 import {ProjectsPage} from '@/features/projects/ProjectsPage';
@@ -53,7 +54,7 @@ export function App() {
             <Route path="/app/projects" element={<ProjectsPage />} />
             <Route path="/app/new" element={<NewReelPage />} />
             <Route path="/app/p/:id/script" element={<ScriptEditorPage />} />
-            <Route path="/app/p/:id/edit" element={<ComingSoon title="Reel editor" milestone="F6" />} />
+            <Route path="/app/p/:id/edit" element={<ReelEditorPage />} />
             <Route path="/app/p/:id/render" element={<ComingSoon title="Render" milestone="F7" />} />
             <Route path="/app/p/:id/publish" element={<ComingSoon title="Publish" milestone="F7" />} />
             <Route path="/app/settings" element={<ComingSoon title="Settings" milestone="F8" />} />
