@@ -437,10 +437,9 @@ describe('B6 DELETE /projects/:id', () => {
 
 describe('endpoints that are not mocked yet', () => {
   it.each([
-    ['GET', '/credits/ledger'],
     ['POST', '/ideas'],
     ['GET', '/projects/10000000-0000-4000-8000-000000000001'],
-    ['POST', '/me/password'],
+    ['POST', '/projects/x/render'],
   ])('%s %s answers 501 not_mocked in the error format, not a page of HTML', async (method, path) => {
     const res = await call(method, path, method === 'GET' ? undefined : {});
 
@@ -620,7 +619,10 @@ describe('H1 GET /credits', () => {
     expect(status).toBe(200);
     expect(body).toMatchObject({balance: 86, monthlyAllowance: 100});
     expect(new Date(body.resetsAt).getTime()).toBeGreaterThan(Date.now());
-    expect(Object.keys(body.costs).sort()).toEqual(['aiImage', 'aiVideoClip', 'render', 'script', 'transcribe', 'voicePer30s']);
+    expect(Object.keys(body.costs).sort()).toEqual([
+      'aiImage', 'aiVideoClip', 'caption', 'hooks', 'ideas', 'publish', 'render', 'rewrite', 'script', 'transcribe',
+      'voicePer30s', 'voiceSceneShort',
+    ]);
   });
 
   it('needs a signed-in user', async () => {

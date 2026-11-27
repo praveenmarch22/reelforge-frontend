@@ -50,6 +50,12 @@ const PUBLIC_PATHS = [
 const isPublic = (path: string) => PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}?`));
 
 let onUnauthenticated: (() => void) | null = null;
+let onInsufficientCredits: ((details: Record<string, unknown>) => void) | null = null;
+
+/** Registers what to do when an action needs more credits than the user has (402): F8's dialog. */
+export function setInsufficientCreditsHandler(handler: ((details: Record<string, unknown>) => void) | null): void {
+  onInsufficientCredits = handler;
+}
 
 /** Registers what to do when the session turns out to be gone (the app sends the user to login). */
 export function setUnauthenticatedHandler(handler: (() => void) | null): void {
@@ -77,8 +83,11 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
     if (body?.error.code === 'token_expired' && (await refreshSession())) {
       res = await send(path, options);
     }
-    // Still 401: the session is gone (logged out elsewhere, or the refresh failed).
-    if (res.status === 401) onUnauthenticated?.();
+    // Still 401: the session is gone (logged out elsewhere, or the refresh failed). A wrong
+    // password when changing it or deleting the account (A11, A12) is an answer instead: the
+    // session is still valid.
+    const code = res.status === 401 ? ((await res.clone().json().catch(() => null)) as ApiErrorBody | null)?.error.code : '';
+    if (res.status === 401 && code !== 'invalid_credentials') onUnauthenticated?.();
   }
 
   if (res.status === 204) return undefined as T;
@@ -91,6 +100,7 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
   }
   if (!res.ok) {
     const err = (data as ApiErrorBody | null)?.error;
+    if (res.status === 402 && err?.code === 'insufficient_credits') onInsufficientCredits?.(err.details ?? {});
     throw new ApiError(
       res.status,
       err?.code ?? 'unknown_error',

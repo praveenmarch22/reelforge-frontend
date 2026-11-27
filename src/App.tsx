@@ -1,6 +1,8 @@
 import {lazy, Suspense} from 'react';
 import {Navigate, Route, Routes} from 'react-router-dom';
 import {AppShell} from '@/components/layout/AppShell';
+import {AdminPage} from '@/features/admin/AdminPage';
+import {SettingsPage} from '@/features/settings/SettingsPage';
 import {FullPageSpinner} from '@/components/ui/FullPageSpinner';
 import {ForgotPasswordPage} from '@/features/auth/ForgotPasswordPage';
 import {GuestOnly, OnboardingGate, RequireAuth} from '@/features/auth/guards';
@@ -12,7 +14,7 @@ import {DashboardPage} from '@/features/dashboard/DashboardPage';
 import {NewReelPage} from '@/features/create/NewReelPage';
 import {ScriptEditorPage} from '@/features/create/ScriptEditorPage';
 import {ReelEditorPage} from '@/features/editor/ReelEditorPage';
-import {ComingSoon, NotFound} from '@/features/misc/ComingSoon';
+import {NotFound} from '@/features/misc/ComingSoon';
 import {OnboardingPage} from '@/features/onboarding/OnboardingPage';
 import {PublishPage} from '@/features/publish/PublishPage';
 import {RenderPage} from '@/features/publish/RenderPage';
@@ -70,8 +72,8 @@ export function App() {
             <Route path="/app/p/:id/edit" element={<ReelEditorPage />} />
             <Route path="/app/p/:id/render" element={<RenderPage />} />
             <Route path="/app/p/:id/publish" element={<PublishPage />} />
-            <Route path="/app/settings" element={<ComingSoon title="Settings" milestone="F8" />} />
-            <Route path="/admin" element={<ComingSoon title="Admin" milestone="F8" />} />
+            <Route path="/app/settings" element={<SettingsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Route>
       </Route>

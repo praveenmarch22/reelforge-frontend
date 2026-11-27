@@ -239,8 +239,63 @@ export const handlers = [
     if (!user) return unauthenticated();
     return HttpResponse.json({
       ...toUser(db, user).credits,
-      costs: {script: 1, voicePer30s: 2, aiImage: 1, aiVideoClip: 10, render: 2, transcribe: 1},
+      costs: {script: 1, voicePer30s: 2, voiceSceneShort: 1, aiImage: 1, aiVideoClip: 10, render: 2, transcribe: 1, ideas: 0, hooks: 0, rewrite: 1, caption: 0, publish: 0},
     });
+  }),
+
+  // H2 (F8): the mock keeps no history, so it shows the grant every account starts with.
+  http.get(url('/credits/ledger'), async () => {
+    const db = loadDb();
+    const user = currentUser(db);
+    if (!user) return unauthenticated();
+    const allowance = toUser(db, user).credits.monthlyAllowance;
+    return HttpResponse.json({
+      items: [{id: 'grant-1', amount: allowance, kind: 'grant', note: 'Monthly credits', jobId: null, projectId: null, createdAt: new Date().toISOString()}],
+      nextCursor: null,
+    });
+  }),
+
+  // A11 (F8)
+  http.post(url('/me/password'), async ({request}) => {
+    await delay(LATENCY_MS);
+    const db = loadDb();
+    const user = currentUser(db);
+    if (!user) return unauthenticated();
+    const body = (await request.json()) as {currentPassword?: string; newPassword?: string};
+    if (body.currentPassword !== user.password) return fail(401, 'invalid_credentials', 'That password is not correct.');
+    if (!body.newPassword || body.newPassword.length < 8) {
+      return fail(400, 'validation_error', 'Some details need another look.', {fields: {newPassword: 'Use at least 8 characters'}});
+    }
+    user.password = body.newPassword;
+    saveDb(db);
+    return noContent();
+  }),
+
+  // A12 (F8)
+  http.delete(url('/me'), async ({request}) => {
+    await delay(LATENCY_MS);
+    const db = loadDb();
+    const user = currentUser(db);
+    if (!user) return unauthenticated();
+    const body = (await request.json().catch(() => ({}))) as {password?: string};
+    if (body.password !== user.password) return fail(401, 'invalid_credentials', 'That password is not correct.');
+    db.users = db.users.filter((u) => u.id !== user.id);
+    db.projects = db.projects.filter((p) => p.userId !== user.id);
+    db.sessionUserId = null;
+    saveDb(db);
+    return noContent();
+  }),
+
+  // F3 (F8)
+  http.delete(url('/connections/:platform'), async ({params}) => {
+    await delay(LATENCY_MS);
+    const db = loadDb();
+    const user = currentUser(db);
+    if (!user) return unauthenticated();
+    if (params.platform !== 'youtube') return fail(404, 'not_available', 'Publishing to Instagram is coming soon.');
+    if (db.youtube) delete db.youtube[user.id];
+    saveDb(db);
+    return noContent();
   }),
 
   // D3

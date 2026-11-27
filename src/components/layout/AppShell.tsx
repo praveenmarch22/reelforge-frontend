@@ -7,6 +7,7 @@ import type {User} from '@/api/types';
 import {Button} from '@/components/ui/Button';
 import {LogoMark} from '@/components/ui/Logo';
 import {cn} from '@/lib/cn';
+import {OutOfCredits} from '@/components/credits/OutOfCredits';
 
 function NavItem({to, label, icon: Icon, end}: {to: string; label: string; icon: LucideIcon; end?: boolean}) {
   return (
@@ -225,6 +226,7 @@ export function AppShell() {
         <div className="mx-auto w-full max-w-[1240px] px-6 py-7 sm:px-10">
           {!user.emailVerified ? <VerifyBanner /> : null}
           <Outlet />
+          <OutOfCredits />
         </div>
       </main>
     </div>

@@ -36,27 +36,39 @@ test.describe('unknown URLs', () => {
   });
 });
 
-test.describe('screens that are not built yet', () => {
-  // Every designed screen has a route and shows the placeholder inside the app shell, not the 404 page.
-  for (const [path, title] of [
-    ['/app/settings', 'Settings'],
-    // /app/p/:id/render and /publish were here until F7 built them; see src/features/publish.
-    // /onboarding was in this list until F4 built it; it is covered by onboarding*.spec.ts.
-    // /app/new and /app/p/:id/script were here until F5 built them; see e2e-real/ and src/features/create.
-    // /app/p/:id/edit was here until F6 built it; see e2e-real/reel-editor.spec.ts and src/features/editor.
-  ]) {
-    test(`${path} shows the "${title}" placeholder`, async ({page}) => {
-      await loginAsDemo(page);
-      await page.goto(path);
+// Every designed screen is built now (F4 to F8), so no route shows the "not built yet" placeholder.
+test.describe('settings (F8)', () => {
+  test('opens on the profile tab, and the tabs are kept in the address', async ({page}) => {
+    await loginAsDemo(page);
+    await page.goto('/app/settings');
+    await expect(h1(page)).toHaveText('Settings');
+    await expect(page.getByRole('tab', {name: 'Profile'})).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByLabel('Name')).toHaveValue(/.+/);
 
-      await expect(h1(page)).toHaveText(title);
-      await expect(page.getByText("This screen isn't built yet")).toBeVisible();
-      await expect(page.getByRole('navigation', {name: 'Main'})).toBeVisible();
+    await page.getByRole('tab', {name: 'Credits'}).click();
+    await expect(page).toHaveURL(/\/app\/settings\?tab=credits$/);
+    await expect(page.getByRole('meter', {name: 'Credits left'})).toBeVisible();
+    await expect(page.getByText('Monthly credits')).toBeVisible();
 
-      await page.getByRole('link', {name: 'Back to home'}).click();
-      await expect(page).toHaveURL(/\/app$/);
-    });
-  }
+    await page.getByRole('tab', {name: 'YouTube'}).click();
+    await expect(page.getByText(/Connected as/)).toContainText('Demo Shorts');
+    await expect(page.getByText('Coming soon.')).toBeVisible();
+
+    await page.getByRole('tab', {name: 'Security'}).click();
+    await expect(page.getByRole('heading', {name: 'Change password'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Delete account'})).toBeVisible();
+  });
+
+  test('a wrong current password is said at the field, and the session stays', async ({page}) => {
+    await loginAsDemo(page);
+    await page.goto('/app/settings?tab=security');
+    await page.getByRole('textbox', {name: 'Current password'}).fill('not-my-password'); // not its show/hide button
+    await page.getByRole('textbox', {name: 'New password', exact: true}).fill('a-new-password-1');
+    await page.getByRole('textbox', {name: 'New password again'}).fill('a-new-password-1');
+    await page.getByRole('button', {name: 'Change password'}).click();
+    await expect(page.getByText('That isn’t your current password')).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/settings\?tab=security$/);
+  });
 });
 
 test.describe('navigation', () => {
