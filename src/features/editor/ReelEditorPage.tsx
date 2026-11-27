@@ -1,9 +1,10 @@
 import {Player, type PlayerRef} from '@remotion/player';
-import {ArrowLeft, Clapperboard, Loader2, Zap} from 'lucide-react';
+import {ArrowLeft, Clapperboard, Loader2, Send, Zap} from 'lucide-react';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {Navigate, useNavigate, useParams} from 'react-router-dom';
 import {ApiError} from '@/api/client';
 import {useCredits, useEstimate, useGenerate, useProject, useReorderScenes, useTimeline} from '@/api/projects';
+import {useStartRender} from '@/api/publishing';
 import {TopBar} from '@/components/layout/AppShell';
 import {StatusPill} from '@/components/reels/StatusPill';
 import {Button} from '@/components/ui/Button';
@@ -33,6 +34,7 @@ export function ReelEditorPage() {
   const estimate = useEstimate(id, !!p && p.status !== 'scripting');
   const credits = useCredits();
   const generate = useGenerate(id);
+  const startRender = useStartRender(id);
   const reorder = useReorderScenes(id);
   const player = useRef<PlayerRef>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -96,6 +98,53 @@ export function ReelEditorPage() {
       .finally(() => setStarting(false));
   };
 
+  // F7: unsaved edits are sent first, then the render starts (E1) and its page opens.
+  const render = () => {
+    if (starting) return;
+    const cost = credits.data?.costs.render ?? 2;
+    if (!window.confirm(`Render this Reel into a video? ${cost} credits, given back if it fails.`)) return;
+    setStarting(true);
+    void flushAll()
+      .then(() => startRender.mutateAsync())
+      .then(
+        () => navigate(`/app/p/${id}/render`),
+        (e: unknown) => {
+          if (e instanceof ApiError && e.code === 'already_running') {
+            // Started from another tab? The page's data is from before: read it again (BUG-082).
+            void project.refetch().then(({data}) => {
+              if (data?.status === 'rendering') navigate(`/app/p/${id}/render`);
+              else setActionError(errorText(e, 'Rendering didn’t start.'));
+            });
+            return;
+          }
+          if (e instanceof ApiError && e.code === 'not_ready') {
+            const waiting = (e.details?.scenes as string[] | undefined) ?? [];
+            if (waiting[0]) setSelectedId(waiting[0]);
+            const numbers = scenes.filter((s) => waiting.includes(s.id)).map((s) => s.position);
+            setActionError(
+              numbers.length
+                ? `Scene${numbers.length === 1 ? '' : 's'} ${numbers.join(', ')} ${numbers.length === 1 ? 'isn’t' : 'aren’t'} ready yet. Generate ${numbers.length === 1 ? 'it' : 'them'} first.`
+                : errorText(e, 'Rendering didn’t start.'),
+            );
+            return;
+          }
+          if (e instanceof ApiError && (e.code === 'too_long' || e.code === 'too_short')) {
+            const s = e.details?.seconds;
+            const length = typeof s === 'number' ? ` It is ${s.toFixed(1)} s now.` : '';
+            setActionError(
+              e.code === 'too_long'
+                ? `A Reel can be at most 90 seconds.${length} Shorten the script, then render.`
+                : `A Reel must be at least 3 seconds.${length} Add to the script, then render.`,
+            );
+            return;
+          }
+          setActionError(errorText(e, 'Rendering didn’t start.'));
+        },
+      )
+      .finally(() => setStarting(false));
+  };
+  const canRender = ['ready', 'rendered', 'render_failed', 'posted', 'post_failed'].includes(project.data?.status ?? '');
+
   // Another scene: its unsaved text is sent first; if that fails, the creator stays on this one
   // with the error showing, so nothing typed is lost unnoticed (QF6-001).
   const select = (sceneId: string) => {
@@ -157,12 +206,39 @@ export function ReelEditorPage() {
               {estimate.data ? ` · ${estimate.data.credits} credit${estimate.data.credits === 1 ? '' : 's'}` : ''}
             </Button>
           ) : null}
-          <Button size="sm" variant="secondary" disabled aria-describedby="render-note">
-            <Clapperboard className="h-3.5 w-3.5" aria-hidden /> Render
-          </Button>
-          <span id="render-note" className="self-center text-[11px] text-muted">
-            Rendering to a video comes next
-          </span>
+          {p.status === 'rendering' ? (
+            <Button size="sm" variant="secondary" onClick={() => navigate(`/app/p/${id}/render`)}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Rendering…
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant={canRender && !missing ? 'primary' : 'secondary'}
+              disabled={!canRender || t?.tooLong}
+              loading={starting && startRender.isPending}
+              onClick={render}
+              aria-describedby={canRender && !t?.tooLong ? undefined : 'render-why'}
+            >
+              <Clapperboard className="h-3.5 w-3.5" aria-hidden /> Render
+            </Button>
+          )}
+          {/* A finished video exists (a later attempt stopped or failed doesn't hide it). */}
+          {!canRender || t?.tooLong ? (
+            <span id="render-why" className="self-center text-[11px] text-muted">
+              {t?.tooLong
+                ? 'Over 90 s: shorten it to render'
+                : p.status === 'generating'
+                  ? 'Rendering opens when every part is made'
+                  : p.status === 'posting'
+                    ? 'Publishing is running'
+                    : 'Every scene needs its voice and visual first'}
+            </span>
+          ) : null}
+          {p.latestRender?.state === 'succeeded' || p.thumbnailUrl ? (
+            <Button size="sm" variant="secondary" onClick={() => navigate(`/app/p/${id}/publish`)}>
+              <Send className="h-3.5 w-3.5" aria-hidden /> Publish
+            </Button>
+          ) : null}
         </span>
       </div>
 

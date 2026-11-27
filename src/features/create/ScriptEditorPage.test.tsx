@@ -844,11 +844,12 @@ describe('Script editor: failures and shortening (round 2)', () => {
     await waitFor(() => expect(api.calls('PATCH /projects/:id')[0]?.body).toEqual({title: 'My own title'}));
   });
 
-  it('shows the credits and Instagram pills, and has no second main landmark', async () => {
+  it('shows the credits pill (and no channel pill without a channel), and has no second main landmark', async () => {
     open();
     await ready();
     expect(await screen.findByRole('link', {name: /credits left$/})).toBeInTheDocument();
-    expect(screen.getAllByRole('link').some((l) => l.getAttribute('href') === '/app/settings?tab=instagram')).toBe(true);
+    // F7: the channel pill shows only once YouTube is connected.
+    expect(screen.getAllByRole('link').some((l) => l.getAttribute('href') === '/app/settings?tab=youtube')).toBe(false);
     expect(screen.queryByRole('main')).not.toBeInTheDocument(); // the app shell owns <main>
     expect(screen.getByRole('region', {name: 'Script storyboard'})).toBeInTheDocument();
   });

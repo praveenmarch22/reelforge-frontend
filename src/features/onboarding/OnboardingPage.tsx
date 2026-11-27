@@ -8,11 +8,11 @@ import type {User} from '@/api/types';
 import {Logo} from '@/components/ui/Logo';
 import {Notice} from '@/components/ui/Notice';
 import {cn} from '@/lib/cn';
-import {InstagramStep} from './InstagramStep';
+import {YouTubeStep} from './YouTubeStep';
 import {NicheStep} from './NicheStep';
 import {VoiceStep} from './VoiceStep';
 
-const STEPS = ['Niche', 'Voice', 'Instagram'] as const;
+const STEPS = ['Niche', 'Voice', 'YouTube'] as const;
 type StepNumber = 1 | 2 | 3;
 
 function parseStep(value: string | null): StepNumber {
@@ -23,7 +23,7 @@ function parseStep(value: string | null): StepNumber {
 function isSaved(step: number, user: User): boolean {
   if (step === 1) return user.niche.trim() !== '';
   if (step === 2) return user.defaults.voiceId !== '';
-  return user.instagram.connected;
+  return user.connections?.youtube?.status === 'connected';
 }
 
 function Stepper({current, user}: {current: number; user: User}) {
@@ -61,9 +61,9 @@ function Stepper({current, user}: {current: number; user: User}) {
 }
 
 /**
- * First-run setup: niche, voice, Instagram. Every step can be skipped, and the whole
+ * First-run setup: niche, voice, YouTube (Instagram in B6b). Every step can be skipped, and the whole
  * setup can be skipped from the top-right link. Shown once; settings covers changes later.
- * The step lives in the URL (?step=2) so reload, back and the Instagram redirect all work.
+ * The step lives in the URL (?step=2) so reload, back and the Google redirect all work.
  */
 export function OnboardingPage() {
   const navigate = useNavigate();
@@ -136,10 +136,12 @@ export function OnboardingPage() {
           {step === 1 ? <NicheStep user={user} onNext={() => goTo(2)} /> : null}
           {step === 2 ? <VoiceStep user={user} onBack={() => goTo(1)} onNext={() => goTo(3)} /> : null}
           {step === 3 ? (
-            <InstagramStep
+            <YouTubeStep
               user={user}
-              result={params.get('instagram')}
+              connected={params.get('connected')}
+              error={params.get('connection_error')}
               reason={params.get('reason')}
+              onResultSeen={() => setParams({step: '3'}, {replace: true})}
               onBack={() => goTo(2)}
               onFinish={finish}
               finishing={update.isPending}

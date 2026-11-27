@@ -144,6 +144,9 @@ export type ProjectUpdate = Partial<{
   musicMood: Mood;
   music: {trackId: string} | null;
   settings: Partial<ProjectSettings>;
+  postTitle: string;
+  postCaption: string;
+  hashtags: string[];
 }>;
 
 export function useUpdateProject(id: string) {

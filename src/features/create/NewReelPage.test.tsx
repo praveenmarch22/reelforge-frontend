@@ -90,15 +90,16 @@ describe('New Reel: the prompt box', () => {
     expect(box()).toHaveValue('One.\nTwo.');
   });
 
-  it('shows the credits and Instagram pills in the top bar', async () => {
-    const me = user();
+  it('shows the credits and the YouTube channel pills in the top bar (F7: YouTube first)', async () => {
+    const me = user({
+      connections: {youtube: {status: 'connected', name: 'Asha Shorts', pictureUrl: null, connectedAt: null}, instagram: null},
+    });
     open('/app/new', me);
     expect(
       screen.getByRole('link', {name: `${me.credits.balance} of ${me.credits.monthlyAllowance} credits left`}),
     ).toBeInTheDocument();
-    const instagram = screen.getAllByRole('link').find((l) => l.getAttribute('href') === '/app/settings?tab=instagram');
-    expect(instagram).toBeDefined();
-    expect(instagram).toHaveTextContent(me.instagram.connected ? `@${me.instagram.username}` : /Connect Instagram/);
+    const channel = screen.getAllByRole('link').find((l) => l.getAttribute('href') === '/app/settings?tab=youtube');
+    expect(channel).toHaveTextContent('Asha Shorts');
   });
 
   it('an empty topic or script is refused before anything is sent, and the error is tied to the box', async () => {

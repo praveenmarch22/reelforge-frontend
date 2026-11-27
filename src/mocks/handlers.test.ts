@@ -40,7 +40,10 @@ function lastToken(kind: 'verify_email' | 'reset_password'): string {
   return new URL(link, location.origin).searchParams.get('token')!;
 }
 
-const USER_KEYS = ['credits', 'defaults', 'email', 'emailVerified', 'id', 'instagram', 'isAdmin', 'name', 'niche', 'onboardingCompleted'];
+const USER_KEYS = [
+  'connections', 'credits', 'defaults', 'email', 'emailVerified', 'id', 'instagram', 'isAdmin', 'name', 'niche',
+  'onboardingCompleted',
+];
 const SUMMARY_KEYS = ['durationSeconds', 'id', 'mode', 'progress', 'status', 'targetSeconds', 'thumbnailUrl', 'title', 'updatedAt'];
 
 describe('A1 POST /auth/signup', () => {
@@ -622,5 +625,81 @@ describe('H1 GET /credits', () => {
 
   it('needs a signed-in user', async () => {
     expect((await get('/credits')).status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------- F7: YouTube connect (B6 F1)
+
+describe('F1 GET /connections/:platform/connect (YouTube, F7 mock)', () => {
+  const connect = (platform: string, returnTo?: string) =>
+    get(`/connections/${platform}/connect${returnTo === undefined ? '' : `?returnTo=${encodeURIComponent(returnTo)}`}`);
+  const verifiedNewUser = async () => {
+    await signUp();
+    await post('/auth/verify-email', {token: lastToken('verify_email')});
+  };
+
+  it('needs a signed-in user', async () => {
+    const res = await connect('youtube', '/onboarding?step=3');
+    expect([res.status, res.body.error.code]).toEqual([401, 'not_authenticated']);
+  });
+
+  it('answers 403 email_not_verified for an unverified user', async () => {
+    await signUp();
+    const res = await connect('youtube', '/onboarding?step=3');
+    expect([res.status, res.body.error.code]).toEqual([403, 'email_not_verified']);
+  });
+
+  it('answers 404 not_available for Instagram (until B6b)', async () => {
+    await loginDemo();
+    const res = await connect('instagram', '/onboarding?step=3');
+    expect([res.status, res.body.error.code]).toEqual([404, 'not_available']);
+  });
+
+  it('a new user has no YouTube connection until connecting', async () => {
+    await verifiedNewUser();
+    expect((await get('/me')).body.user.connections).toEqual({youtube: null, instagram: null});
+  });
+
+  it('answers only {authorizeUrl}, which comes straight back to returnTo with connected=youtube, and /me shows the channel', async () => {
+    await verifiedNewUser();
+    const res = await connect('youtube', '/app/p/abc/publish');
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body)).toEqual(['authorizeUrl']);
+    expect(res.body.authorizeUrl).toBe('/app/p/abc/publish?connected=youtube');
+    const {youtube, instagram} = (await get('/me')).body.user.connections;
+    expect(instagram).toBeNull();
+    expect(Object.keys(youtube).sort()).toEqual(['connectedAt', 'name', 'pictureUrl', 'status']);
+    expect(youtube).toMatchObject({status: 'connected', name: 'Demo Channel', pictureUrl: null});
+    expect(Number.isNaN(Date.parse(youtube.connectedAt))).toBe(false);
+  });
+
+  it('keeps the query string of returnTo', async () => {
+    await verifiedNewUser();
+    const res = await connect('youtube', '/onboarding?step=3');
+    expect(res.body.authorizeUrl).toBe('/onboarding?step=3&connected=youtube');
+  });
+
+  it('an unsafe or missing returnTo goes to the settings page', async () => {
+    await verifiedNewUser();
+    expect((await connect('youtube', 'https://evil.example/x')).body.authorizeUrl).toBe('/app/settings?connected=youtube');
+    expect((await connect('youtube', '//evil.example')).body.authorizeUrl).toBe('/app/settings?connected=youtube');
+    expect((await connect('youtube')).body.authorizeUrl).toBe('/app/settings?connected=youtube');
+  });
+
+  it('drops an earlier result left in returnTo, as the real API does (connected, connection_error, platform, reason)', async () => {
+    await verifiedNewUser();
+    const res = await connect('youtube', '/onboarding?step=3&connection_error=youtube&reason=denied&platform=youtube');
+    expect(res.body.authorizeUrl).toBe('/onboarding?step=3&connected=youtube');
+  });
+
+  it("connecting one user leaves another user's connection alone", async () => {
+    await loginDemo();
+    expect((await get('/me')).body.user.connections.youtube).toBeNull();
+    await post('/auth/logout');
+    await verifiedNewUser();
+    await connect('youtube', '/app');
+    await post('/auth/logout');
+    await loginDemo();
+    expect((await get('/me')).body.user.connections.youtube).toBeNull();
   });
 });

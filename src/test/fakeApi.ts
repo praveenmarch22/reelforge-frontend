@@ -141,6 +141,7 @@ export function project(over: Partial<Project> = {}, scenes = [scene(1), scene(2
     estimatedSeconds: estimated,
     wordCount: scenes.reduce((s, x) => s + x.narration.trim().split(/\s+/).length, 0),
     timelineVersion: 1,
+    postTitle: '',
     postCaption: '',
     hashtags: [],
     scenes,

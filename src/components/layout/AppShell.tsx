@@ -1,4 +1,4 @@
-import {Clapperboard, Home, Instagram, LogOut, Settings, ShieldCheck, type LucideIcon} from 'lucide-react';
+import {Clapperboard, Home, LogOut, Settings, ShieldCheck, Youtube, type LucideIcon} from 'lucide-react';
 import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {Link, NavLink, Outlet} from 'react-router-dom';
 import {ApiError} from '@/api/client';
@@ -122,30 +122,30 @@ function CreditsPill({user}: {user: User}) {
   );
 }
 
-function InstagramPill({user}: {user: User}) {
-  const {connected, username, status} = user.instagram;
-  const healthy = connected && status === 'connected';
+/** The publishing account (B6: YouTube first). Nothing shows until a channel is connected;
+ * connecting happens on the publish screen. */
+function ChannelPill({user}: {user: User}) {
+  const youtube = user.connections?.youtube;
+  if (!youtube) return null;
   return (
     <Link
-      to="/app/settings?tab=instagram"
+      to="/app/settings?tab=youtube"
       className="hidden h-9 items-center gap-2 rounded-full border border-line bg-white/[0.04] px-3.5 text-[13px] font-medium transition hover:bg-white/[0.08] sm:flex"
     >
-      <Instagram className="h-4 w-4 text-muted" aria-hidden />
-      {healthy ? (
+      <Youtube className="h-4 w-4 text-red-400" aria-hidden />
+      {youtube.status === 'connected' ? (
         <>
-          <span className="max-w-[10rem] truncate">@{username}</span>
+          <span className="max-w-[10rem] truncate">{youtube.name}</span>
           <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-label="Connected" />
         </>
-      ) : connected ? (
-        <span className="text-warn">Reconnect Instagram</span>
       ) : (
-        <span className="text-muted">Connect Instagram</span>
+        <span className="text-warn">Reconnect YouTube</span>
       )}
     </Link>
   );
 }
 
-/** The credits and Instagram pills alone, for screens with their own heading (New Reel, editors). */
+/** The credits and channel pills alone, for screens with their own heading (New Reel, editors). */
 export function TopBar({children}: {children?: ReactNode}) {
   const {data: user} = useMe();
   return (
@@ -154,14 +154,14 @@ export function TopBar({children}: {children?: ReactNode}) {
       {user ? (
         <div className="ml-auto flex items-center gap-2.5">
           <CreditsPill user={user} />
-          <InstagramPill user={user} />
+          <ChannelPill user={user} />
         </div>
       ) : null}
     </div>
   );
 }
 
-/** Title row used at the top of every app page, with the credits and Instagram pills on the right. */
+/** Title row used at the top of every app page, with the credits and channel pills on the right. */
 export function PageHeader({title, children}: {title: ReactNode; children?: ReactNode}) {
   const {data: user} = useMe();
   return (
@@ -172,7 +172,7 @@ export function PageHeader({title, children}: {title: ReactNode; children?: Reac
         {user ? (
           <>
             <CreditsPill user={user} />
-            <InstagramPill user={user} />
+            <ChannelPill user={user} />
           </>
         ) : null}
       </div>

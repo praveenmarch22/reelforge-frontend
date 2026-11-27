@@ -245,7 +245,7 @@ afterEach(() => {
 // ---------------------------------------------------------------- the page
 
 describe('Reel editor: header, player and states', () => {
-  it('shows the title, status, credits, the length, the player with the timeline and a disabled Render', async () => {
+  it('shows the title, status, credits, the length, the player with the timeline and Render (F7)', async () => {
     open();
     await loaded();
     expect(screen.getByRole('heading', {level: 1, name: 'Three morning habits'})).toBeInTheDocument();
@@ -261,11 +261,9 @@ describe('Reel editor: header, player and states', () => {
       controls: true,
     });
     expect(screen.getByText(`${t.durationSeconds.toFixed(1)}s`)).toBeInTheDocument();
-    const renderButton = screen.getByRole('button', {name: /render/i});
-    expect(renderButton).toBeDisabled();
-    // Round 2 (QF6-016): the note is visible text, and describes the button.
-    expect(screen.getByText('Rendering to a video comes next')).toBeVisible();
-    expect(renderButton).toHaveAccessibleDescription('Rendering to a video comes next');
+    // F7: a ready Reel can be rendered.
+    const renderButton = screen.getByRole('button', {name: /^render$/i});
+    expect(renderButton).toBeEnabled();
     // Nothing is missing: no Generate missing.
     expect(screen.queryByRole('button', {name: /generate missing/i})).not.toBeInTheDocument();
     expect(screen.queryByRole('main')).not.toBeInTheDocument(); // the app shell owns <main>
@@ -1533,5 +1531,254 @@ describe('Reel editor round 3: thumbnails and sliders (QF6-019, slider note)', (
     view.unmount();
     await act(() => vi.advanceTimersByTimeAsync(500));
     await waitFor(() => expect(current.settings.voiceVolume).toBe(0.3));
+  });
+});
+
+// ---------------------------------------------------------------- F7: Render and Publish
+
+describe('Reel editor F7: Render and Publish (docs/SCREENS_F7.md section 1; API E1)', () => {
+  function openWithPages() {
+    const client = new QueryClient({defaultOptions: {queries: {retry: false}, mutations: {retry: false}}});
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[`/app/p/${current.id}/edit`]} future={{v7_startTransition: true, v7_relativeSplatPath: true}}>
+          <Routes>
+            <Route path="/app/p/:id/edit" element={<ReelEditorPage />} />
+            <Route path="*" element={<Where />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+  const renderButton = () => screen.getByRole('button', {name: /^render$/i});
+  const renders = () => api.calls('POST /projects/:id/render');
+  const aRenderOf = (over: Partial<NonNullable<Project['latestRender']>> = {}): NonNullable<Project['latestRender']> => ({
+    id: 'r1',
+    projectId: 'p1',
+    jobId: 'j1',
+    state: 'queued',
+    progress: 0,
+    timelineVersion: 1,
+    outdated: false,
+    video: null,
+    thumbnailUrl: null,
+    error: null,
+    createdAt: '2026-11-26T10:00:00Z',
+    finishedAt: null,
+    ...over,
+  });
+  const startedAnswer = () => ({
+    status: 202,
+    body: {render: aRenderOf(), job: job({type: 'render'}), creditsReserved: 2, balance: 75},
+  });
+
+  beforeEach(() => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
+  it.each(['ready', 'rendered', 'render_failed', 'posted', 'post_failed'] as const)(
+    'Render is enabled for a %s Reel, with no reason shown',
+    async (status) => {
+      current = readyProject({status});
+      openWithPages();
+      await loaded();
+      expect(renderButton()).toBeEnabled();
+      expect(renderButton()).not.toHaveAccessibleDescription();
+    },
+  );
+
+  it.each([
+    ['generating', 'Rendering opens when every part is made'],
+    ['posting', 'Publishing is running'],
+    ['draft', 'Every scene needs its voice and visual first'],
+    ['needs_attention', 'Every scene needs its voice and visual first'],
+  ] as const)('Render is disabled for a %s Reel and says why in visible text', async (status, why) => {
+    current = project({status, activeJobs: status === 'generating' ? [job()] : []}, [readyScene(1), scene(2)]);
+    openWithPages();
+    await loaded();
+    expect(renderButton()).toBeDisabled();
+    expect(screen.getByText(why)).toBeVisible();
+    expect(renderButton()).toHaveAccessibleDescription(why);
+  });
+
+  it('Render is disabled over 90 s and says why', async () => {
+    current = readyProject({}, [readyScene(1, {voice: {...readyScene(1).voice!, durationSeconds: 95}})]);
+    openWithPages();
+    await screen.findByText(/over 90 s: shorten it before rendering/);
+    expect(renderButton()).toBeDisabled();
+    expect(renderButton()).toHaveAccessibleDescription('Over 90 s: shorten it to render');
+  });
+
+  it('confirms with the cost from H1, sends E1 with an Idempotency-Key, then opens the render page', async () => {
+    costs = {...costs, costs: {...costs.costs, render: 3}};
+    api.on('POST /projects/:id/render', () => startedAnswer());
+    openWithPages();
+    await loaded();
+    await waitFor(() => expect(api.calls('GET /credits').length).toBeGreaterThan(0));
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    await userEvent.click(renderButton());
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringMatching(/3 credits, given back if it fails/));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/app/p/p1/render'));
+    expect(renders()).toHaveLength(1);
+    expect(renders()[0].path).toBe('/projects/p1/render');
+    expect(renders()[0].headers['Idempotency-Key']).toBeTruthy();
+  });
+
+  it('Cancel at the confirm sends nothing and stays', async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    api.on('POST /projects/:id/render', () => startedAnswer());
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    expect(window.confirm).toHaveBeenCalled();
+    expect(renders()).toHaveLength(0);
+    expect(screen.queryByTestId('where')).not.toBeInTheDocument();
+  });
+
+  it('saves unsaved inspector text first, then starts the render', async () => {
+    const gate = holdFirstSceneSave();
+    api.on('POST /projects/:id/render', () => startedAnswer());
+    openWithPages();
+    await loaded();
+    await userEvent.click(tab('Voice'));
+    await userEvent.type(screen.getByRole('textbox', {name: 'Narration'}), ' more');
+    fireEvent.click(renderButton());
+    await waitFor(() => expect(patches()).toHaveLength(1));
+    expect(renders()).toHaveLength(0);
+    await act(async () => gate.release());
+    await waitFor(() => expect(renders()).toHaveLength(1));
+    expect(indexOf('PATCH', /^\/scenes\/s1$/)).toBeLessThan(indexOf('POST', /\/render$/));
+  });
+
+  it('a double click while text is being saved starts one render', async () => {
+    const gate = holdFirstSceneSave();
+    api.on('POST /projects/:id/render', () => startedAnswer());
+    openWithPages();
+    await loaded();
+    await userEvent.click(tab('Voice'));
+    await userEvent.type(screen.getByRole('textbox', {name: 'Narration'}), ' more');
+    fireEvent.click(renderButton());
+    fireEvent.click(screen.getByRole('button', {name: /^render$/i}));
+    await waitFor(() => expect(patches()).toHaveLength(1));
+    await act(async () => gate.release());
+    await waitFor(() => expect(renders().length).toBeGreaterThan(0));
+    await act(() => new Promise((r) => setTimeout(r, 300)));
+    expect(renders()).toHaveLength(1);
+  });
+
+  it('a save that fails stops the render with the reason', async () => {
+    api.on('PATCH /scenes/:id', () => apiError(500, 'internal_error', 'Something failed on our side.'));
+    api.on('POST /projects/:id/render', () => startedAnswer());
+    openWithPages();
+    await loaded();
+    await userEvent.click(tab('Voice'));
+    await userEvent.type(screen.getByRole('textbox', {name: 'Narration'}), ' more');
+    fireEvent.click(renderButton());
+    expect(await screen.findByText(/Something failed on our side\./, {}, {timeout: 3000})).toBeInTheDocument();
+    expect(renders()).toHaveLength(0);
+  });
+
+  it('not_ready names the scenes by number and selects the first one listed', async () => {
+    api.on('POST /projects/:id/render', () => apiError(409, 'not_ready', 'Some scenes are not ready.', {scenes: ['s2', 's3']}));
+    openWithPages();
+    await loaded();
+    expect(inspector()).toHaveAccessibleName('Scene 1 settings');
+    await userEvent.click(renderButton());
+    expect(await screen.findByText('Scenes 2, 3 aren’t ready yet. Generate them first.')).toBeInTheDocument();
+    await waitFor(() => expect(inspector()).toHaveAccessibleName('Scene 2 settings'));
+    expect(screen.queryByTestId('where')).not.toBeInTheDocument();
+  });
+
+  it('not_ready for one scene uses the singular', async () => {
+    api.on('POST /projects/:id/render', () => apiError(409, 'not_ready', 'A scene is not ready.', {scenes: ['s3']}));
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    expect(await screen.findByText('Scene 3 isn’t ready yet. Generate it first.')).toBeInTheDocument();
+    await waitFor(() => expect(inspector()).toHaveAccessibleName('Scene 3 settings'));
+  });
+
+  it('not_ready without scenes (generating, no scenes) shows the server text', async () => {
+    api.on('POST /projects/:id/render', () => apiError(409, 'not_ready', 'This Reel is still being made.'));
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    expect(await screen.findByText('This Reel is still being made.')).toBeInTheDocument();
+  });
+
+  it('too_long and too_short give the length', async () => {
+    let code = 'too_long';
+    let seconds = 93.27;
+    api.on('POST /projects/:id/render', () => apiError(409, code, 'Wrong length.', {seconds}));
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    expect(await screen.findByText('A Reel can be at most 90 seconds. It is 93.3 s now. Shorten the script, then render.')).toBeInTheDocument();
+    code = 'too_short';
+    seconds = 2.04;
+    await userEvent.click(renderButton());
+    expect(await screen.findByText('A Reel must be at least 3 seconds. It is 2.0 s now. Add to the script, then render.')).toBeInTheDocument();
+  });
+
+  it('out of credits (402) shows the shared credit message', async () => {
+    api.on('POST /projects/:id/render', () =>
+      apiError(402, 'insufficient_credits', 'Not enough credits.', {needed: 2, balance: 0, resetsAt: '2026-12-01T00:00:00Z'}),
+    );
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    expect(await screen.findByText(/This needs 2 credits and you have 0\. Your credits renew on/)).toBeInTheDocument();
+  });
+
+  it('already_running for another Reel shows the message and stays', async () => {
+    api.on('POST /projects/:id/render', () => apiError(409, 'already_running', 'Another of your Reels is rendering. Wait for it to finish.'));
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    expect(await screen.findByText('Another of your Reels is rendering. Wait for it to finish.')).toBeInTheDocument();
+    expect(screen.queryByTestId('where')).not.toBeInTheDocument();
+  });
+
+  it('already_running because this Reel is already rendering (started from another tab) opens the render page', async () => {
+    // The editor still shows the Reel as ready; the API knows it is rendering.
+    api.on('POST /projects/:id/render', () => {
+      current = {...current, status: 'rendering', latestRender: aRenderOf({state: 'running'})};
+      return apiError(409, 'already_running', 'This Reel is already rendering.');
+    });
+    openWithPages();
+    await loaded();
+    await userEvent.click(renderButton());
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/app/p/p1/render'), {timeout: 3000});
+  });
+
+  it('while rendering the button reads "Rendering…" and opens the render page without E1', async () => {
+    current = readyProject({status: 'rendering', latestRender: aRenderOf({state: 'running'})});
+    openWithPages();
+    await loaded();
+    expect(screen.queryByRole('button', {name: /^render$/i})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Rendering…'}));
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/p/p1/render');
+    expect(renders()).toHaveLength(0);
+  });
+
+  it.each([
+    ['the latest render succeeded', {latestRender: {state: 'succeeded'}, thumbnailUrl: null}, true],
+    ['a later attempt failed but an earlier video exists (its cover)', {status: 'render_failed', latestRender: {state: 'failed'}, thumbnailUrl: 'https://s3/cover.jpg'}, true],
+    ['a render is running and nothing was finished before', {status: 'rendering', latestRender: {state: 'running'}, thumbnailUrl: null}, false],
+    ['a render failed and nothing was finished before', {status: 'render_failed', latestRender: {state: 'failed'}, thumbnailUrl: null}, false],
+    ['nothing was ever rendered', {latestRender: null, thumbnailUrl: null}, false],
+  ] as const)('Publish visibility when %s', async (_, over, shown) => {
+    const latest = over.latestRender ? aRenderOf(over.latestRender) : null;
+    current = readyProject({...over, latestRender: latest} as Partial<Project>);
+    openWithPages();
+    await loaded();
+    const publish = screen.queryByRole('button', {name: 'Publish'});
+    if (!shown) {
+      expect(publish).not.toBeInTheDocument();
+      return;
+    }
+    expect(publish).toBeInTheDocument();
+    await userEvent.click(publish!);
+    expect(screen.getByTestId('where')).toHaveTextContent('/app/p/p1/publish');
   });
 });

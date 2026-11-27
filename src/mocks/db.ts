@@ -3,12 +3,12 @@
 // Passwords are stored in plain text here because this is fake data in your own browser;
 // the real backend hashes them (see docs/DB_DESIGN.md in the reelforge-backend repository).
 
-import type {Credits, InstagramStatus, ProjectSummary, User, Voice} from '@/api/types';
+import type {Connection, Credits, InstagramStatus, ProjectSummary, User, Voice} from '@/api/types';
 
 const KEY = 'rf_mock_db_v1';
 export const DEV_LINK_KEY = 'rf_mock_last_link';
 
-export type DbUser = Omit<User, 'credits' | 'instagram'> & {password: string};
+export type DbUser = Omit<User, 'credits' | 'instagram' | 'connections'> & {password: string};
 export type DbToken = {token: string; userId: string; kind: 'verify_email' | 'reset_password'; used: boolean};
 export type DbProject = ProjectSummary & {userId: string};
 
@@ -24,6 +24,8 @@ export type Db = {
   instagram: Record<string, InstagramStatus>;
   /** Added in F4; absent in databases saved by older versions. */
   oauthStates?: DbOAuthState[];
+  /** Connected YouTube channels (F7); absent in databases saved by older versions. */
+  youtube?: Record<string, Connection>;
 };
 
 // Demo account for local testing. Listed in frontend/README.md.
@@ -121,6 +123,7 @@ export function toUser(db: Db, u: DbUser): User {
     ...rest,
     credits: db.credits[u.id] ?? {balance: 0, monthlyAllowance: 100, resetsAt: daysFromNow(30)},
     instagram: db.instagram[u.id] ?? NOT_CONNECTED,
+    connections: {youtube: db.youtube?.[u.id] ?? null, instagram: null},
   };
 }
 

@@ -29,6 +29,14 @@ export type InstagramStatus = {
   expiresAt: string | null;
 };
 
+/** A publishing account (API F1–F3, milestone B6). */
+export type Connection = {
+  status: 'connected' | 'reconnect_required';
+  name: string;
+  pictureUrl: string | null;
+  connectedAt: string | null;
+};
+
 export type User = {
   id: string;
   email: string;
@@ -40,6 +48,8 @@ export type User = {
   isAdmin: boolean;
   credits: Credits;
   instagram: InstagramStatus;
+  /** YouTube first (B6); Instagram stays null until B6b. */
+  connections: {youtube: Connection | null; instagram: Connection | null};
 };
 
 export type ProjectSummary = {
@@ -180,12 +190,61 @@ export type Project = ProjectSummary & {
   estimatedSeconds: number;
   wordCount: number;
   timelineVersion: number;
+  postTitle: string;
   postCaption: string;
   hashtags: string[];
   scenes: Scene[];
   activeJobs: Job[];
+  latestRender: Render | null;
+  latestPost: Post | null;
   createdAt: string;
 };
+
+// ---------------------------------------------------------------- render and publish (F7)
+
+export type RenderState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+/** API design, Shared objects: Render (milestone B5). */
+export type Render = {
+  id: string;
+  projectId: string;
+  jobId: string | null;
+  state: RenderState;
+  progress: number;
+  timelineVersion: number;
+  outdated: boolean;
+  video: {url: string; downloadUrl: string; durationSeconds: number | null; sizeBytes: number | null} | null;
+  thumbnailUrl: string | null;
+  error: {code: string; message: string} | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+export type Platform = 'youtube' | 'instagram';
+export type Visibility = 'public' | 'unlisted' | 'private';
+export type PostState = 'queued' | 'uploading' | 'processing' | 'published' | 'failed';
+
+/** docs/PUBLISHING_YOUTUBE.md, Post (milestone B6). */
+export type Post = {
+  id: string;
+  renderId: string;
+  projectId: string;
+  platform: Platform;
+  state: PostState;
+  progress: number;
+  title: string;
+  caption: string;
+  visibility: Visibility;
+  credits: string[];
+  url: string | null;
+  privateUntilVerified: boolean;
+  error: {code: string; message: string} | null;
+  createdAt: string;
+  publishedAt: string | null;
+};
+
+/** Why connecting failed, from `reason` after Google sends the browser back (API F2). */
+export type ConnectionErrorReason = 'denied' | 'no_channel' | 'missing_permission' | 'failed';
 
 export type Estimate = {
   credits: number;

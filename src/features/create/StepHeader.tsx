@@ -2,12 +2,15 @@ import {Check} from 'lucide-react';
 import {cn} from '@/lib/cn';
 
 const STEPS = ['Idea', 'Script', 'Create'] as const;
+const WITH_PUBLISH = ['Idea', 'Script', 'Create', 'Publish'] as const;
 
-/** "1 Idea · 2 Script · 3 Create", as at the top of the New Reel and Script editor designs. */
-export function StepHeader({current}: {current: 0 | 1 | 2}) {
+/** "1 Idea · 2 Script · 3 Create", as at the top of the New Reel and Script editor designs.
+ * The render and publish screens (F7) add "4 Publish". */
+export function StepHeader({current, publish = false}: {current: 0 | 1 | 2 | 3; publish?: boolean}) {
+  const steps = publish ? WITH_PUBLISH : STEPS;
   return (
     <ol className="flex items-center justify-center gap-2 text-xs font-medium" aria-label="Steps">
-      {STEPS.map((step, i) => (
+      {steps.map((step, i) => (
         <li key={step} className="flex items-center gap-2">
           {i > 0 ? <span className="h-px w-6 bg-line" aria-hidden /> : null}
           <span

@@ -400,3 +400,36 @@ describe('listVoices (D3)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------- F7: YouTube connections in the mock database
+
+describe('connections.youtube (F7): databases saved by older versions', () => {
+  it('a database saved before F7 (no youtube key) still loads, and every user has youtube: null', () => {
+    const db = loadDb();
+    const old = JSON.parse(JSON.stringify(db));
+    delete old.youtube;
+    localStorage.setItem('rf_mock_db_v1', JSON.stringify(old));
+    const reloaded = loadDb();
+    expect(reloaded.youtube).toBeUndefined();
+    for (const u of reloaded.users) {
+      expect(toUser(reloaded, u).connections).toEqual({youtube: null, instagram: null});
+    }
+  });
+
+  it('the seed has no YouTube channel connected', () => {
+    const db = loadDb();
+    expect(toUser(db, db.users[0]).connections).toEqual({youtube: null, instagram: null});
+  });
+
+  it('a stored channel shows on that user only, and the older instagram field is kept', () => {
+    const db = loadDb();
+    const other = createUser(db, ASHA);
+    const channel = {status: 'connected' as const, name: 'Asha Shorts', pictureUrl: null, connectedAt: '2026-11-27T00:00:00Z'};
+    db.youtube = {[other.id]: channel};
+    saveDb(db);
+    const reloaded = loadDb();
+    expect(toUser(reloaded, reloaded.users.find((u) => u.id === other.id)!).connections.youtube).toEqual(channel);
+    expect(toUser(reloaded, reloaded.users[0]).connections.youtube).toBeNull();
+    expect(toUser(reloaded, reloaded.users[0]).instagram).toBeDefined();
+  });
+});

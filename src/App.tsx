@@ -14,6 +14,8 @@ import {ScriptEditorPage} from '@/features/create/ScriptEditorPage';
 import {ReelEditorPage} from '@/features/editor/ReelEditorPage';
 import {ComingSoon, NotFound} from '@/features/misc/ComingSoon';
 import {OnboardingPage} from '@/features/onboarding/OnboardingPage';
+import {PublishPage} from '@/features/publish/PublishPage';
+import {RenderPage} from '@/features/publish/RenderPage';
 import {ProjectsPage} from '@/features/projects/ProjectsPage';
 import {USE_MOCKS} from '@/lib/env';
 
@@ -55,8 +57,8 @@ export function App() {
             <Route path="/app/new" element={<NewReelPage />} />
             <Route path="/app/p/:id/script" element={<ScriptEditorPage />} />
             <Route path="/app/p/:id/edit" element={<ReelEditorPage />} />
-            <Route path="/app/p/:id/render" element={<ComingSoon title="Render" milestone="F7" />} />
-            <Route path="/app/p/:id/publish" element={<ComingSoon title="Publish" milestone="F7" />} />
+            <Route path="/app/p/:id/render" element={<RenderPage />} />
+            <Route path="/app/p/:id/publish" element={<PublishPage />} />
             <Route path="/app/settings" element={<ComingSoon title="Settings" milestone="F8" />} />
             <Route path="/admin" element={<ComingSoon title="Admin" milestone="F8" />} />
           </Route>
