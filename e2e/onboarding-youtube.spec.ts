@@ -155,7 +155,10 @@ test.describe('the state of a connect attempt (F2)', () => {
 
     await page.goto(link);
     await answerGoogle(page, ANSWER.allow, 'Someone');
+    // The redirect is a full page load: wait for the page before asking the mock API anything.
     await expect(page).toHaveURL(/\/app\/settings|\/onboarding/);
+    // Still in the setup, so the app sends the user back to it.
+    await expect(h1(page)).toHaveText(/Connect YouTube|Settings|What do you post about\?/);
     expect((await currentUser(page)).connections.youtube).toBeNull();
   });
 
