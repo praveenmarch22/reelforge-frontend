@@ -53,7 +53,7 @@ export async function signUp(page: Page, user = NEW_USER) {
 export const ONBOARDING_STEPS = {
   1: {label: 'Niche', title: 'What do you post about?'},
   2: {label: 'Voice', title: 'Pick your voice'},
-  3: {label: 'Instagram', title: 'Connect Instagram'},
+  3: {label: 'YouTube', title: 'Connect YouTube'},
 } as const;
 export type OnboardingStep = keyof typeof ONBOARDING_STEPS;
 

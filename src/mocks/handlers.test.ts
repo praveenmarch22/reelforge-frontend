@@ -1,6 +1,6 @@
 import {setupServer} from 'msw/node';
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import {DEMO_EMAIL, DEMO_PASSWORD, finishInstagramConnect, readDevLink} from './db';
+import {DEMO_EMAIL, DEMO_PASSWORD, finishInstagramConnect, finishYouTubeConnect, readDevLink, type YouTubeOutcome} from './db';
 import {handlers} from './handlers';
 
 // The mock API is the contract the screens are built against, so it is checked against
@@ -660,46 +660,70 @@ describe('F1 GET /connections/:platform/connect (YouTube, F7 mock)', () => {
     expect((await get('/me')).body.user.connections).toEqual({youtube: null, instagram: null});
   });
 
-  it('answers only {authorizeUrl}, which comes straight back to returnTo with connected=youtube, and /me shows the channel', async () => {
+  /** F1, then the stand-in Google page's answer (db.finishYouTubeConnect, as F2). */
+  const connectAndAnswer = async (returnTo: string | undefined, outcome: YouTubeOutcome = 'allow') => {
+    const res = await connect('youtube', returnTo);
+    const state = new URL(res.body.authorizeUrl, 'http://app.invalid').searchParams.get('state')!;
+    return {res, back: finishYouTubeConnect(state, outcome, 'Asha Shorts')};
+  };
+
+  it('answers only {authorizeUrl}, the stand-in Google page; allowing comes back with connected=youtube and /me shows the channel', async () => {
     await verifiedNewUser();
-    const res = await connect('youtube', '/app/p/abc/publish');
+    const {res, back} = await connectAndAnswer('/app/p/abc/publish');
     expect(res.status).toBe(200);
     expect(Object.keys(res.body)).toEqual(['authorizeUrl']);
-    expect(res.body.authorizeUrl).toBe('/app/p/abc/publish?connected=youtube');
+    expect(res.body.authorizeUrl).toMatch(/^\/mock\/youtube\?state=\w+$/);
+    expect(back).toBe('/app/p/abc/publish?connected=youtube');
     const {youtube, instagram} = (await get('/me')).body.user.connections;
     expect(instagram).toBeNull();
     expect(Object.keys(youtube).sort()).toEqual(['connectedAt', 'name', 'pictureUrl', 'status']);
-    expect(youtube).toMatchObject({status: 'connected', name: 'Demo Channel', pictureUrl: null});
+    expect(youtube).toMatchObject({status: 'connected', name: 'Asha Shorts', pictureUrl: null});
     expect(Number.isNaN(Date.parse(youtube.connectedAt))).toBe(false);
+  });
+
+  it('each refusal comes back with its reason and stores nothing', async () => {
+    await verifiedNewUser();
+    for (const outcome of ['denied', 'missing_permission', 'no_channel'] as const) {
+      const {back} = await connectAndAnswer('/onboarding?step=3', outcome);
+      expect(back).toBe(`/onboarding?step=3&connection_error=youtube&reason=${outcome}`);
+    }
+    expect((await get('/me')).body.user.connections.youtube).toBeNull();
+  });
+
+  it('a state is used once', async () => {
+    await verifiedNewUser();
+    const res = await connect('youtube', '/onboarding?step=3');
+    const state = new URL(res.body.authorizeUrl, 'http://app.invalid').searchParams.get('state')!;
+    expect(finishYouTubeConnect(state, 'allow', 'A')).toBe('/onboarding?step=3&connected=youtube');
+    expect(finishYouTubeConnect(state, 'allow', 'A')).toBe('/app/settings?connection_error=youtube&reason=failed');
   });
 
   it('keeps the query string of returnTo', async () => {
     await verifiedNewUser();
-    const res = await connect('youtube', '/onboarding?step=3');
-    expect(res.body.authorizeUrl).toBe('/onboarding?step=3&connected=youtube');
+    expect((await connectAndAnswer('/onboarding?step=3')).back).toBe('/onboarding?step=3&connected=youtube');
   });
 
   it('an unsafe or missing returnTo goes to the settings page', async () => {
     await verifiedNewUser();
-    expect((await connect('youtube', 'https://evil.example/x')).body.authorizeUrl).toBe('/app/settings?connected=youtube');
-    expect((await connect('youtube', '//evil.example')).body.authorizeUrl).toBe('/app/settings?connected=youtube');
-    expect((await connect('youtube')).body.authorizeUrl).toBe('/app/settings?connected=youtube');
+    expect((await connectAndAnswer('https://evil.example/x')).back).toBe('/app/settings?connected=youtube');
+    expect((await connectAndAnswer('//evil.example')).back).toBe('/app/settings?connected=youtube');
+    expect((await connectAndAnswer(undefined)).back).toBe('/app/settings?connected=youtube');
   });
 
   it('drops an earlier result left in returnTo, as the real API does (connected, connection_error, platform, reason)', async () => {
     await verifiedNewUser();
-    const res = await connect('youtube', '/onboarding?step=3&connection_error=youtube&reason=denied&platform=youtube');
-    expect(res.body.authorizeUrl).toBe('/onboarding?step=3&connected=youtube');
+    const {back} = await connectAndAnswer('/onboarding?step=3&connection_error=youtube&reason=denied&platform=youtube');
+    expect(back).toBe('/onboarding?step=3&connected=youtube');
   });
 
   it("connecting one user leaves another user's connection alone", async () => {
     await loginDemo();
-    expect((await get('/me')).body.user.connections.youtube).toBeNull();
+    const before = (await get('/me')).body.user.connections.youtube;
     await post('/auth/logout');
     await verifiedNewUser();
-    await connect('youtube', '/app');
+    await connectAndAnswer('/app');
     await post('/auth/logout');
     await loginDemo();
-    expect((await get('/me')).body.user.connections.youtube).toBeNull();
+    expect((await get('/me')).body.user.connections.youtube).toEqual(before);
   });
 });

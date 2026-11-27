@@ -416,9 +416,9 @@ describe('connections.youtube (F7): databases saved by older versions', () => {
     }
   });
 
-  it('the seed has no YouTube channel connected', () => {
+  it('the seed connects a YouTube channel for the demo account only (for the channel pill)', () => {
     const db = loadDb();
-    expect(toUser(db, db.users[0]).connections).toEqual({youtube: null, instagram: null});
+    expect(toUser(db, db.users[0]).connections).toMatchObject({youtube: {status: 'connected', name: 'Demo Shorts'}, instagram: null});
   });
 
   it('a stored channel shows on that user only, and the older instagram field is kept', () => {

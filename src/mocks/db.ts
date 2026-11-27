@@ -89,6 +89,9 @@ function seed(): Db {
     instagram: {
       [DEMO_ID]: {connected: true, username: 'praveen_fit', status: 'connected', expiresAt: daysFromNow(52)},
     },
+    youtube: {
+      [DEMO_ID]: {status: 'connected', name: 'Demo Shorts', pictureUrl: null, connectedAt: daysFromNow(-20)},
+    },
   };
 }
 
@@ -213,6 +216,42 @@ const VOICE_SEED = [
 
 export function listVoices(): Voice[] {
   return VOICE_SEED.map(({tone, ...voice}) => ({...voice, provider: 'elevenlabs', previewUrl: toneDataUrl(tone)}));
+}
+
+// ---------------------------------------------------------------- YouTube connect (API F1, F2; F7)
+
+export type YouTubeOutcome = 'allow' | 'denied' | 'no_channel' | 'missing_permission';
+
+/**
+ * What the real backend does in F2 after Google sends the browser back (YouTube, F7): checks
+ * the one-use state and the signed-in user, stores the channel (or not), and returns where to
+ * send the browser, with `connected=youtube` or `connection_error=youtube&reason=…`.
+ */
+export function finishYouTubeConnect(state: string, outcome: YouTubeOutcome, channel: string): string {
+  const db = loadDb();
+  const failed = `${DEFAULT_RETURN_TO}?connection_error=youtube&reason=failed`;
+  const pending = (db.oauthStates ?? []).find((s) => s.state === state);
+  if (!pending) return failed;
+  db.oauthStates = (db.oauthStates ?? []).filter((s) => s.state !== state); // one use only
+  const expired = Date.now() - (pending.createdAt ?? 0) > OAUTH_STATE_MINUTES * 60_000;
+  if (expired || db.sessionUserId !== pending.userId) {
+    saveDb(db);
+    return failed;
+  }
+  const url = new URL(safeReturnTo(pending.returnTo), 'http://app.invalid');
+  for (const key of ['connected', 'connection_error', 'platform', 'reason']) url.searchParams.delete(key);
+  if (outcome === 'allow') {
+    db.youtube = {
+      ...db.youtube,
+      [pending.userId]: {status: 'connected', name: channel.trim() || 'My Channel', pictureUrl: null, connectedAt: new Date().toISOString()},
+    };
+    url.searchParams.set('connected', 'youtube');
+  } else {
+    url.searchParams.set('connection_error', 'youtube');
+    url.searchParams.set('reason', outcome);
+  }
+  saveDb(db);
+  return url.pathname + url.search;
 }
 
 // ---------------------------------------------------------------- Instagram connect (API F1, F2)

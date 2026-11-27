@@ -39,9 +39,8 @@ test.describe('unknown URLs', () => {
 test.describe('screens that are not built yet', () => {
   // Every designed screen has a route and shows the placeholder inside the app shell, not the 404 page.
   for (const [path, title] of [
-    ['/app/p/some-id/render', 'Render'],
-    ['/app/p/some-id/publish', 'Publish'],
     ['/app/settings', 'Settings'],
+    // /app/p/:id/render and /publish were here until F7 built them; see src/features/publish.
     // /onboarding was in this list until F4 built it; it is covered by onboarding*.spec.ts.
     // /app/new and /app/p/:id/script were here until F5 built them; see e2e-real/ and src/features/create.
     // /app/p/:id/edit was here until F6 built it; see e2e-real/reel-editor.spec.ts and src/features/editor.
@@ -78,14 +77,14 @@ test.describe('navigation', () => {
     await expect(page).toHaveURL(/\/app$/);
   });
 
-  test('the credits and Instagram pills open their settings tabs', async ({page}) => {
+  test('the credits and YouTube channel pills open their settings tabs', async ({page}) => {
     await loginAsDemo(page);
 
     await page.getByRole('link', {name: '86 of 100 credits left'}).click();
     await expect(page).toHaveURL(/\/app\/settings\?tab=credits$/);
 
-    await page.getByRole('link', {name: /@praveen_fit/}).click();
-    await expect(page).toHaveURL(/\/app\/settings\?tab=instagram$/);
+    await page.getByRole('link', {name: /Demo Shorts/}).click();
+    await expect(page).toHaveURL(/\/app\/settings\?tab=youtube$/);
   });
 });
 

@@ -41,9 +41,9 @@ test.describe('dashboard for a new account', () => {
     await expect(page.getByRole('heading', {name: 'Recent Reels'})).toHaveCount(0);
     await expect(page.getByRole('article')).toHaveCount(0);
 
-    // A new account starts with the monthly allowance and no Instagram account.
+    // A new account starts with the monthly allowance and no channel (no channel pill; F7).
     await expect(page.getByRole('link', {name: '100 of 100 credits left'})).toBeVisible();
-    await expect(page.getByRole('link', {name: 'Connect Instagram'})).toBeVisible();
+    await expect(page.locator('a[href="/app/settings?tab=youtube"]')).toHaveCount(0);
     await expect(page.getByRole('navigation', {name: 'Main'}).getByRole('link', {name: 'Admin'})).toHaveCount(0);
   });
 
@@ -84,7 +84,7 @@ test.describe('dashboard for the demo account', () => {
     await loginAsDemo(page);
   });
 
-  test('shows the stats tiles, the credits and Instagram pills, and the admin link', async ({page}) => {
+  test('shows the stats tiles, the credits and YouTube channel pills, and the admin link', async ({page}) => {
     const summary = page.getByRole('region', {name: 'Summary'});
     await expect(summary).toContainText(/Reels made\s*7/);
     await expect(summary).toContainText(/Posted\s*2/);
@@ -92,7 +92,7 @@ test.describe('dashboard for the demo account', () => {
     await expect(summary).toContainText('86 of 100 left');
 
     await expect(page.getByRole('link', {name: '86 of 100 credits left'})).toHaveText('86 credits');
-    await expect(page.getByRole('link', {name: /@praveen_fit/})).toBeVisible();
+    await expect(page.getByRole('link', {name: /Demo Shorts/})).toBeVisible();
     await expect(page.getByRole('navigation', {name: 'Main'}).getByRole('link', {name: 'Admin'})).toBeVisible();
     await expect(page.getByText('Your Reels will appear here')).toHaveCount(0);
   });
@@ -137,7 +137,7 @@ test.describe('dashboard for the demo account', () => {
 
     await page.getByRole('link', {name: `Open ${DEMO_REELS.posted[0]}`}).click();
     await expect(page).toHaveURL(/\/publish$/);
-    await expect(h1(page)).toHaveText('Publish');
+    // F7 built the publish screen; it runs on the real backend (the mock API has no project details).
   });
 
   test('"View all" opens the library', async ({page}) => {

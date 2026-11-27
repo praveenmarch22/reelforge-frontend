@@ -21,6 +21,7 @@ import {USE_MOCKS} from '@/lib/env';
 
 // Mock mode only: a stand-in for Instagram's approval screen. Not part of production builds' routes.
 const MockInstagramPage = USE_MOCKS ? lazy(() => import('@/mocks/MockInstagramPage')) : null;
+const MockYouTubePage = USE_MOCKS ? lazy(() => import('@/mocks/MockYouTubePage')) : null;
 
 export function App() {
   return (
@@ -39,6 +40,16 @@ export function App() {
 
       <Route element={<RequireAuth />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
+        {MockYouTubePage ? (
+          <Route
+            path="/mock/youtube"
+            element={
+              <Suspense fallback={<FullPageSpinner />}>
+                <MockYouTubePage />
+              </Suspense>
+            }
+          />
+        ) : null}
         {MockInstagramPage ? (
           <Route
             path="/mock/instagram"

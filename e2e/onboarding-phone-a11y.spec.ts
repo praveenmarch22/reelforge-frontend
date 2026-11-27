@@ -25,8 +25,8 @@ const PHONE = {width: 390, height: 844};
 // The narrowest phone still in use (QA-038).
 const SMALL_PHONE = {width: 320, height: 568};
 const VOICE_NAMES = listVoices().map((v) => v.name);
-// Instagram usernames are at most 30 characters; the longest one must still fit the screen.
-const LONGEST_USERNAME = 'asha_'.padEnd(30, 'x');
+// YouTube channel names are at most 100 characters; a long one must still fit the screen.
+const LONG_CHANNEL = 'Asha Shorts '.padEnd(60, 'x');
 
 const button = (page: Page, name: string) => page.getByRole('button', {name, exact: true});
 const topic = (page: Page, name: string) => page.getByRole('group', {name: 'Topics'}).getByRole('button', {name, exact: true});
@@ -90,39 +90,37 @@ test.describe('onboarding at phone width (390x844)', () => {
 
     // Step 3
     await expectOnboardingStep(page, 3);
-    await button(page, 'How to switch').tap();
-    await expect(page.getByRole('listitem').filter({hasText: 'Switch to professional account'})).toBeVisible();
-    expect(await fitsViewportWidth(page), 'step 3 with the guide open: no sideways scrolling').toBe(true);
-    for (const name of ['Skip setup', 'Back', 'Skip for now', 'Connect Instagram']) {
+    expect(await fitsViewportWidth(page), 'step 3: no sideways scrolling').toBe(true);
+    for (const name of ['Skip setup', 'Back', 'Skip for now', 'Connect YouTube']) {
       await expectReachable(button(page, name), name);
     }
 
-    // The stand-in Instagram page, then the connected state.
-    await button(page, 'Connect Instagram').tap();
-    await expect(h1(page)).toHaveText('Instagram (mock)');
-    expect(await fitsViewportWidth(page), 'stand-in Instagram page: no sideways scrolling').toBe(true);
-    await page.getByLabel('Instagram username').fill(LONGEST_USERNAME);
-    await page.getByRole('button', {name: 'Allow (Creator account)'}).tap();
+    // The stand-in Google page, then the connected state.
+    await button(page, 'Connect YouTube').tap();
+    await expect(h1(page)).toHaveText('Google (mock)');
+    expect(await fitsViewportWidth(page), 'stand-in Google page: no sideways scrolling').toBe(true);
+    await page.getByLabel('Channel name').fill(LONG_CHANNEL);
+    await page.getByRole('button', {name: 'Allow', exact: true}).tap();
 
-    await expectOnboardingStep(page, 3, 'Instagram connected');
-    await expect(page.getByText(`Connected as @${LONGEST_USERNAME}`, {exact: true})).toBeVisible();
+    await expectOnboardingStep(page, 3, 'YouTube connected');
+    await expect(page.getByText(`Connected as ${LONG_CHANNEL}`, {exact: true})).toBeVisible();
     expect(await fitsViewportWidth(page), 'step 3 connected: no sideways scrolling').toBe(true);
     for (const name of ['Back', 'Finish']) await expectReachable(button(page, name), name);
     await button(page, 'Finish').tap();
 
     await expect(page).toHaveURL(/\/app$/);
     await expect(h1(page)).toHaveText('Welcome, Asha');
-    expect(await currentUser(page)).toMatchObject({onboardingCompleted: true, instagram: {connected: true}});
+    expect(await currentUser(page)).toMatchObject({onboardingCompleted: true, connections: {youtube: {status: 'connected'}}});
   });
 
-  test('step 3 with the longest failure message (personal account, with the switch steps) fits the screen', async ({page}) => {
+  test('step 3 with the longest failure message (no channel, with its link) fits the screen', async ({page}) => {
     await startOnboarding(page, 3);
-    await button(page, 'Connect Instagram').tap();
-    await expect(h1(page)).toHaveText('Instagram (mock)');
-    await page.getByRole('button', {name: 'Allow, but this is a personal account'}).tap();
+    await button(page, 'Connect YouTube').tap();
+    await expect(h1(page)).toHaveText('Google (mock)');
+    await page.getByRole('button', {name: 'This account has no YouTube channel'}).tap();
 
     await expectOnboardingStep(page, 3);
-    await expect(page.getByRole('alert').getByRole('listitem')).toHaveCount(3);
+    await expect(page.getByRole('alert').getByRole('link', {name: 'Create a YouTube channel'})).toBeVisible();
     expect(await fitsViewportWidth(page), 'no sideways scrolling').toBe(true);
     for (const name of ['Skip setup', 'Back', 'Skip for now', 'Try again']) {
       await expectReachable(button(page, name), name);
@@ -165,33 +163,30 @@ test.describe('onboarding on the smallest phone (320x568)', () => {
     await expectReachable(button(page, 'Continue'), 'Continue');
     await button(page, 'Continue').tap();
 
-    // Step 3, before connecting, with the guide open
+    // Step 3, before connecting
     await expectOnboardingStep(page, 3);
     expect(await fitsViewportWidth(page), 'step 3: no sideways scrolling').toBe(true);
     await expectStepNames(page, 3, false);
-    await button(page, 'How to switch').tap();
-    await expect(page.getByRole('listitem').filter({hasText: 'Switch to professional account'})).toBeVisible();
-    expect(await fitsViewportWidth(page), 'step 3 with the guide open: no sideways scrolling').toBe(true);
-    for (const name of ['Skip setup', 'Back', 'Skip for now', 'Connect Instagram']) {
+    for (const name of ['Skip setup', 'Back', 'Skip for now', 'Connect YouTube']) {
       await expectReachable(button(page, name), name);
     }
 
     // Step 3 with the longest failure message
-    await button(page, 'Connect Instagram').tap();
-    await expect(h1(page)).toHaveText('Instagram (mock)');
-    await page.getByRole('button', {name: 'Allow, but this is a personal account'}).tap();
+    await button(page, 'Connect YouTube').tap();
+    await expect(h1(page)).toHaveText('Google (mock)');
+    await page.getByRole('button', {name: 'This account has no YouTube channel'}).tap();
     await expectOnboardingStep(page, 3);
-    await expect(page.getByRole('alert').getByRole('listitem')).toHaveCount(3);
+    await expect(page.getByRole('alert').getByRole('link', {name: 'Create a YouTube channel'})).toBeVisible();
     expect(await fitsViewportWidth(page), 'step 3 with a failure: no sideways scrolling').toBe(true);
     for (const name of ['Skip setup', 'Back', 'Skip for now', 'Try again']) await expectReachable(button(page, name), name);
 
-    // Step 3 connected, with the longest username
+    // Step 3 connected, with a long channel name
     await button(page, 'Try again').tap();
-    await expect(h1(page)).toHaveText('Instagram (mock)');
-    await page.getByLabel('Instagram username').fill(LONGEST_USERNAME);
-    await page.getByRole('button', {name: 'Allow (Creator account)'}).tap();
-    await expectOnboardingStep(page, 3, 'Instagram connected');
-    await expect(page.getByText(/^Connected as @asha_/)).toBeVisible();
+    await expect(h1(page)).toHaveText('Google (mock)');
+    await page.getByLabel('Channel name').fill(LONG_CHANNEL);
+    await page.getByRole('button', {name: 'Allow', exact: true}).tap();
+    await expectOnboardingStep(page, 3, 'YouTube connected');
+    await expect(page.getByText(/^Connected as Asha Shorts/)).toBeVisible();
     expect(await fitsViewportWidth(page), 'step 3 connected: no sideways scrolling').toBe(true);
     for (const name of ['Skip setup', 'Back', 'Finish']) await expectReachable(button(page, name), name);
     await button(page, 'Finish').tap();
@@ -200,7 +195,7 @@ test.describe('onboarding on the smallest phone (320x568)', () => {
     expect(await currentUser(page)).toMatchObject({
       niche: `Motivation, Education, ${'W'.repeat(40)}`,
       onboardingCompleted: true,
-      instagram: {connected: true, username: LONGEST_USERNAME},
+      connections: {youtube: {status: 'connected', name: LONG_CHANNEL}},
     });
   });
 
@@ -302,13 +297,10 @@ test.describe('onboarding accessibility basics', () => {
     await tabTo(page, button(page, 'Continue'));
     await page.keyboard.press('Enter');
 
-    // Step 3: open the guide, then finish without connecting.
+    // Step 3: finish without connecting.
     await expectOnboardingStep(page, 3);
-    await expectBasics(page, 'Instagram');
-    await tabTo(page, button(page, 'How to switch'));
-    await page.keyboard.press('Enter');
-    await expect(button(page, 'How to switch')).toHaveAttribute('aria-expanded', 'true');
-    await tabTo(page, button(page, 'Connect Instagram'));
+    await expectBasics(page, 'YouTube');
+    await tabTo(page, button(page, 'Connect YouTube'));
     await page.keyboard.press('Shift+Tab');
     await expect(button(page, 'Skip for now')).toBeFocused();
     await page.keyboard.press('Enter');
@@ -333,25 +325,25 @@ test.describe('onboarding accessibility basics', () => {
 
   test('step 3 keeps one h1 and named controls in its failed and connected states, and failures are announced', async ({page}) => {
     await startOnboarding(page, 3);
-    await button(page, 'Connect Instagram').click();
-    await expect(h1(page)).toHaveText('Instagram (mock)');
+    await button(page, 'Connect YouTube').click();
+    await expect(h1(page)).toHaveText('Google (mock)');
     await expect(h1(page)).toHaveCount(1);
-    expect(await controlsWithoutAName(page), 'stand-in Instagram page').toEqual([]);
+    expect(await controlsWithoutAName(page), 'stand-in Google page').toEqual([]);
     await page.getByRole('button', {name: 'Deny the permissions'}).click();
 
     await expectOnboardingStep(page, 3);
     // role="alert": a screen reader announces the failure when it appears.
-    await expect(page.getByRole('alert').filter({hasText: "We couldn't connect your account"})).toBeVisible();
-    await expectBasics(page, 'Instagram');
+    await expect(page.getByRole('alert').filter({hasText: "We couldn't connect your channel"})).toBeVisible();
+    await expectBasics(page, 'YouTube');
 
     await tabTo(page, button(page, 'Try again'));
     await page.keyboard.press('Enter');
-    await expect(h1(page)).toHaveText('Instagram (mock)');
-    await tabTo(page, page.getByRole('button', {name: 'Allow (Creator account)'}));
+    await expect(h1(page)).toHaveText('Google (mock)');
+    await tabTo(page, page.getByRole('button', {name: 'Allow', exact: true}));
     await page.keyboard.press('Enter');
 
-    await expectOnboardingStep(page, 3, 'Instagram connected');
-    await expectBasics(page, 'Instagram');
+    await expectOnboardingStep(page, 3, 'YouTube connected');
+    await expectBasics(page, 'YouTube');
     await tabTo(page, button(page, 'Finish'));
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/app$/);

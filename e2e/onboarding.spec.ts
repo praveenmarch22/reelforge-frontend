@@ -26,7 +26,7 @@ import {
 
 // F4 onboarding: who sees it, moving between the steps, the niche step and the voice step.
 // PRD flow 1 step 4 ("3 short steps, all skippable") and feature A4; API_DESIGN.md A10, D3.
-// The Instagram step is in onboarding-instagram.spec.ts.
+// The YouTube step is in onboarding-youtube.spec.ts.
 
 const VERIFY_BANNER = 'Verify your email to start creating Reels.';
 const NETWORK_ERROR = "Can't reach ReelForge. Check your connection and try again.";
@@ -53,7 +53,7 @@ test.describe('who is sent to onboarding', () => {
 
     await expect(page).toHaveURL(/\/onboarding$/);
     await expectOnboardingStep(page, 1);
-    await expect(setupSteps(page).getByRole('listitem')).toHaveText([/Niche/, /Voice/, /Instagram/]);
+    await expect(setupSteps(page).getByRole('listitem')).toHaveText([/Niche/, /Voice/, /YouTube/]);
     await expect(page.getByText(VERIFY_BANNER)).toHaveCount(0);
 
     for (const path of ['/app', '/app/projects', '/app/settings', '/']) {
@@ -83,7 +83,7 @@ test.describe('who is sent to onboarding', () => {
   test('an unverified user who opens /onboarding by its address is taken to the app, cannot mark the setup done, and still gets it after verifying', async ({page}) => {
     await signUp(page);
 
-    for (const address of ['/onboarding', '/onboarding?step=2', '/onboarding?step=3&instagram=connected']) {
+    for (const address of ['/onboarding', '/onboarding?step=2', '/onboarding?step=3&connected=youtube']) {
       await page.goto(address);
 
       await expect(page, address).toHaveURL(/\/app$/);
@@ -133,7 +133,7 @@ test.describe('who is sent to onboarding', () => {
     await expect(h1(page)).toHaveText('Welcome, Asha');
   });
 
-  // PRD flow 1, steps 4 and 5: niche, voice, Instagram (skipped here), then the empty dashboard.
+  // PRD flow 1, steps 4 and 5: niche, voice, YouTube (skipped here), then the empty dashboard.
   test('a user who goes through all three steps lands on the empty dashboard with everything saved, and is not shown the setup again', async ({page}) => {
     await startOnboarding(page);
 
@@ -239,7 +239,7 @@ test.describe('moving between the steps', () => {
       expect(user.onboardingCompleted).toBe(true);
       expect(user.niche).toBe('');
       expect(user.defaults.voiceId).toBe('');
-      expect(user.instagram.connected).toBe(false);
+      expect(user.connections.youtube).toBeNull();
     });
   }
 
@@ -304,7 +304,7 @@ test.describe('moving between the steps', () => {
 });
 
 // QA-029: "Skip setup" used to race with a request that was still on its way; the late answer
-// brought the user back into the setup, or took them to Instagram from the dashboard.
+// brought the user back into the setup, or took them to Google from the dashboard.
 test.describe('"Skip setup" waits for a request that is in flight', () => {
   test.beforeEach(async ({page}) => {
     await installFaultInjection(page);
@@ -338,21 +338,21 @@ test.describe('"Skip setup" waits for a request that is in flight', () => {
     });
   });
 
-  test('while "Connect Instagram" is waiting for its answer, "Skip setup" and the other ways out are disabled, and the browser then goes to Instagram', async ({page}) => {
+  test('while "Connect YouTube" is waiting for its answer, "Skip setup" and the other ways out are disabled, and the browser then goes to Google', async ({page}) => {
     await startOnboarding(page, 3);
-    await setFaults(page, [{method: 'GET', path: '/instagram/connect', hold: true}]);
+    await setFaults(page, [{method: 'GET', path: '/connections/youtube/connect', hold: true}]);
 
-    await button(page, 'Connect Instagram').click();
+    await button(page, 'Connect YouTube').click();
 
-    await expect(button(page, 'Connect Instagram')).toHaveAttribute('aria-busy', 'true');
+    await expect(button(page, 'Connect YouTube')).toHaveAttribute('aria-busy', 'true');
     await expect(button(page, 'Skip setup')).toBeDisabled();
     await expect(button(page, 'Skip for now')).toBeDisabled();
     await expect(button(page, 'Back')).toBeDisabled();
     await expectOnboardingStep(page, 3);
 
     await releaseHeldRequests(page);
-    await expect(page).toHaveURL(/\/mock\/instagram\?state=\w+/);
-    await expect(h1(page)).toHaveText('Instagram (mock)');
+    await expect(page).toHaveURL(/\/mock\/youtube\?state=\w+/);
+    await expect(h1(page)).toHaveText('Google (mock)');
     expect((await currentUser(page)).onboardingCompleted).toBe(false);
   });
 
@@ -451,12 +451,12 @@ test.describe('the stepper says what is really saved', () => {
     await expectSetupStepState(page, 3, 'ahead');
   });
 
-  test('a connected Instagram account shows step 3 as done from the other steps', async ({page}) => {
+  test('a connected YouTube channel shows step 3 as done from the other steps', async ({page}) => {
     await startOnboarding(page, 3);
-    await button(page, 'Connect Instagram').click();
-    await expect(h1(page)).toHaveText('Instagram (mock)');
-    await page.getByRole('button', {name: 'Allow (Creator account)'}).click();
-    await expectOnboardingStep(page, 3, 'Instagram connected');
+    await button(page, 'Connect YouTube').click();
+    await expect(h1(page)).toHaveText('Google (mock)');
+    await page.getByRole('button', {name: 'Allow', exact: true}).click();
+    await expectOnboardingStep(page, 3, 'YouTube connected');
     await expectSetupStepState(page, 3, 'current');
 
     await button(page, 'Back').click();
@@ -489,7 +489,8 @@ test.describe('focus and page title', () => {
     await expectOnboardingStep(page, 3);
     await stepHeadingHasFocus(page);
     await page.keyboard.press('Tab');
-    await expect(button(page, 'How to switch')).toBeFocused();
+    // The YouTube step's first control is Back (no guide link since F7).
+    await expect(button(page, 'Back')).toBeFocused();
 
     await button(page, 'Back').click();
     await expectOnboardingStep(page, 2);

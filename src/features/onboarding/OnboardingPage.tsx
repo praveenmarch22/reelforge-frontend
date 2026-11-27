@@ -89,7 +89,10 @@ export function OnboardingPage() {
   useEffect(() => {
     if (previousStep.current !== null && previousStep.current !== step) {
       setFinishError(null);
-      document.querySelector<HTMLElement>('[data-step-heading]')?.focus();
+      // The new step starts at the top, with the stepper in view (a short step after a long one
+      // would otherwise stay scrolled down on a phone).
+      window.scrollTo({top: 0});
+      document.querySelector<HTMLElement>('[data-step-heading]')?.focus({preventScroll: true});
     }
     previousStep.current = step;
   }, [step]);

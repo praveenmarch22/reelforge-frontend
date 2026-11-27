@@ -267,8 +267,8 @@ export const handlers = [
     return HttpResponse.json({authorizeUrl: `/mock/instagram?state=${state}`});
   }),
 
-  // F1 for YouTube (B6). The real API answers with Google's sign-in; the mock connects a pretend
-  // channel at once and sends the browser straight back, as Google's redirect would.
+  // F1 for YouTube (B6). The real API answers with Google's sign-in; the mock sends the browser
+  // to a stand-in page inside the app.
   http.get(url('/connections/:platform/connect'), async ({request, params}) => {
     await delay(LATENCY_MS);
     const db = loadDb();
@@ -277,12 +277,11 @@ export const handlers = [
     if (params.platform !== 'youtube') return fail(404, 'not_available', 'Publishing to Instagram is coming soon.');
     if (!user.emailVerified) return fail(403, 'email_not_verified', 'Verify your email address to do this.');
     const returnTo = safeReturnTo(new URL(request.url).searchParams.get('returnTo'));
-    db.youtube = {...db.youtube, [user.id]: {status: 'connected', name: 'Demo Channel', pictureUrl: null, connectedAt: new Date().toISOString()}};
+    // The same one-use state as the real API; the stand-in Google page (src/mocks/MockYouTubePage.tsx)
+    // answers as Google would, and db.finishYouTubeConnect does what F2 does.
+    const state = startInstagramConnect(db, user.id, returnTo);
     saveDb(db);
-    const back = new URL(returnTo, window.location.origin);
-    for (const key of ['connected', 'connection_error', 'platform', 'reason', 'instagram']) back.searchParams.delete(key);
-    back.searchParams.set('connected', 'youtube');
-    return HttpResponse.json({authorizeUrl: back.pathname + back.search});
+    return HttpResponse.json({authorizeUrl: `/mock/youtube?state=${state}`});
   }),
 
   // Keep last. Any endpoint from the API design that has no mock yet answers with a clear
